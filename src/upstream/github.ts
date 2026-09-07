@@ -146,14 +146,16 @@ export function commitsForPath(repo: string, ref: string, path: string): Promise
 
 /** GraphQL — requires a token. Throws MissingSecretError without touching the network. */
 export async function graphql<T = unknown>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
-  if (offline()) throw new MissingSecretError(SOURCE, "network (offline test environment)");
   if (!config.githubToken) throw new MissingSecretError(SOURCE, "GITHUB_TOKEN");
+  // In the offline/test environment the token is still used when present, but with a short
+  // timeout so a page never waits long when there is no connectivity.
   const data = await fetchJson<{ data?: T; errors?: { message: string }[] }>(`${GITHUB_API}/graphql`, {
     source: `${SOURCE}-graphql`,
     method: "POST",
     headers: { ...authHeaders(), "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
     retry: false,
+    timeoutMs: offline() ? 4_000 : config.fetchTimeoutMs,
   });
   if (data.errors?.length) throw new UpstreamError(SOURCE, undefined, `GraphQL: ${data.errors.map((e) => e.message).join("; ")}`);
   if (!data.data) throw new UpstreamError(SOURCE, undefined, "GraphQL: empty response");
@@ -161,5 +163,5 @@ export async function graphql<T = unknown>(query: string, variables: Record<stri
 }
 
 export function hasToken(): boolean {
-  return Boolean(config.githubToken) && !offline();
+  return Boolean(config.githubToken);
 }

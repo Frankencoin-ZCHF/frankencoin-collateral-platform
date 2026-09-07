@@ -18,7 +18,7 @@ export const GET: APIRoute = async () => {
   const sources = {
     github: idx.status === "fulfilled" ? (config.assessmentsLocalPath ? "local-clone" : "ok") : "error",
     frankencoinApi: snap.status === "fulfilled" ? (config.protocolFixturesDir ? "fixtures" : snap.value.degraded.length ? "degraded" : "ok") : "error",
-    discussions: config.assessmentsLocalPath ? "offline" : github.hasToken() ? "configured" : "no-token",
+    discussions: github.hasToken() ? (config.assessmentsLocalPath ? "configured (offline mode: short timeout)" : "configured") : "no-token",
     mode: config.assessmentsLocalPath || config.protocolFixturesDir ? "offline" : "live",
     coingecko: config.coingeckoApiKey ? "pro" : "public",
   };

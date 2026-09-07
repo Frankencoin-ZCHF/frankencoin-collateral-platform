@@ -172,6 +172,6 @@ export async function forCollateral(assessment: Assessment | null, ticker: strin
   } catch (e) {
     if (e instanceof MissingSecretError) return { ...base, reason: "GITHUB_TOKEN is not configured on this server" };
     console.error(`[discussions] ${describeForLog(e)}`);
-    return { ...base, reason: "GitHub Discussions could not be loaded" };
+    return { ...base, reason: "GitHub Discussions could not be reached (no connectivity or GitHub error)" };
   }
 }
