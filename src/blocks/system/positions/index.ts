@@ -14,7 +14,7 @@ const positions: SystemBlock<PositionsData> = {
   id: "positions",
   title: "Positions",
   order: 60,
-  enabled: (ctx) => (ctx.record.live?.positions.total ?? 0) > 0,
+  enabled: (ctx) => (ctx.record.live?.positions.total ?? 0) > 0 && !ctx.record.live?.bridge,
   load: async (ctx) => {
     const l = ctx.record.live!;
     return {

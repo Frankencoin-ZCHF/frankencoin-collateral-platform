@@ -120,7 +120,7 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
     children: [
       { field: "ticker", headerName: "Ticker", pinned: "left", width: 120, cellRenderer: tickerCell },
       { field: "name", headerName: "Name", width: 190 },
-      { field: "lifecycle", headerName: "Lifecycle", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value) },
+      { field: "lifecycle", headerName: "Lifecycle", width: 150, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value, p.data?.isBridge ? `${p.value} · 1:1 bridge` : undefined), headerTooltip: "Collateral lifecycle from protocol state. '1:1 bridge' = a StablecoinBridge minter, not a collateralised position." },
       { field: "status", headerName: "Assessment", width: 125, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value, p.value === "none" ? "none" : undefined) },
       { field: "liveRiskState", headerName: "Live risk", width: 115, cellRenderer: liveRiskCell, headerTooltip: "Live risk now: active challenges, debt close to liquidation, stale or divergent data, integrity exceptions. Click to open the items." },
       { field: "reviewCount", headerName: "Review", width: 90, type: "num", cellRenderer: reviewCell, headerTooltip: "Assessment-review items: differences against a draft proposal, missing governance reference.", hide: true },
@@ -151,7 +151,7 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
       { field: "positionsOpen", headerName: "Open positions", width: 125, type: "num", valueFormatter: num(0) },
       { field: "mintedZchf", headerName: "Minted ZCHF", width: 125, type: "num", valueFormatter: compact },
       { field: "collateralValueChf", headerName: "Oracle-valued collateral", width: 170, type: "num", valueFormatter: compact, headerTooltip: "Collateral quantity × current oracle price", hide: true },
-      { field: "minLiquidationBufferPct", headerName: "Min. liq. buffer", width: 130, type: "num", valueFormatter: pct(1), headerTooltip: "Minimum liquidation buffer: price drop until the riskiest active position becomes challengeable", cellClassRules: { "text-red-700": (p) => p.value != null && p.value < 5, "text-amber-700": (p) => p.value != null && p.value >= 5 && p.value < 15 } },
+      { field: "minLiquidationBufferPct", headerName: "Min. liq. buffer", width: 130, type: "num", valueFormatter: (p: Num) => (p.data?.isBridge ? "n/a (1:1)" : p.value == null ? "–" : formatPercent(p.value, 1)), headerTooltip: "Minimum liquidation buffer: price drop until the riskiest active position becomes challengeable", cellClassRules: { "text-red-700": (p) => p.value != null && p.value < 5, "text-amber-700": (p) => p.value != null && p.value >= 5 && p.value < 15 } },
       { field: "debtWithin10Pct", headerName: "Debt ≤10% of liq.", width: 140, type: "num", valueFormatter: compact, hide: true },
       { field: "weightedCollateralRatioPct", headerName: "Collateralisation", width: 135, type: "num", valueFormatter: pct(0), hide: true },
       { field: "utilizationPct", headerName: "Utilisation", width: 110, type: "num", valueFormatter: pct(1), headerTooltip: "Debt ÷ oracle-valued collateral", hide: true },

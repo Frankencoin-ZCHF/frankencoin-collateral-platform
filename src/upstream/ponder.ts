@@ -11,7 +11,7 @@ import { fetchJson } from "./client";
 
 const SOURCE = "ponder";
 
-export function ponderQuery<T = unknown>(query: string, ttlMs = TTL.MINUTE): Promise<T> {
+export function ponderQuery<T = unknown>(query: string, ttlMs: number = TTL.MINUTE): Promise<T> {
   const key = `ponder:${hash(query)}`;
   return getOrLoad(key, ttlMs, async () => {
     const res = await fetchJson<{ data?: T; errors?: { message: string }[] }>(PONDER_BASE, {

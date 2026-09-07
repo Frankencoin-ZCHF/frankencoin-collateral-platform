@@ -21,7 +21,9 @@ const ASSESSMENT: Record<string, { label: string; cls: string }> = {
   none: { label: "No risk assessment", cls: "border-red-400 text-red-800 bg-red-50" },
   unavailable: { label: "Assessment temporarily unavailable", cls: "border-[var(--color-neutral-400)] text-[var(--color-neutral-650)] bg-[var(--color-neutral-100)]" },
 };
-const lc = LIFECYCLE[record.lifecycle] ?? LIFECYCLE.draft!;
+const lc = { ...(LIFECYCLE[record.lifecycle] ?? LIFECYCLE.draft!) };
+const bridge = record.live?.bridge ?? null;
+if (bridge) lc.label = record.lifecycle === "live" ? "Live 1:1 bridge" : record.lifecycle === "closed" ? "Expired 1:1 bridge" : "1:1 bridge, nothing minted";
 const as = ASSESSMENT[record.assessment?.status ?? (record.assessmentUnavailable ? "unavailable" : "none")]!;
 const pad = size === "lg" ? "px-3 py-1.5 text-[13px]" : "px-2.5 py-1 text-[11px]";
 const open = record.live ? (record.live.counts?.open ?? record.live.positions.active) : 0;
@@ -30,8 +32,9 @@ const open = record.live ? (record.live.counts?.open ?? record.live.positions.ac
 <div class="flex flex-wrap items-center gap-2">
   <span class={`inline-flex items-center gap-1.5 rounded-md font-bold uppercase tracking-wide ${pad} ${lc.cls}`} title="Collateral lifecycle, from the protocol's position state">
     {lc.label}
-    {record.lifecycle === "live" && <span class="font-medium normal-case tracking-normal opacity-90">· {open} open position{open === 1 ? "" : "s"}</span>}
-    {record.lifecycle === "proposed" && <span class="font-medium normal-case tracking-normal opacity-90">· no open positions</span>}
+    {bridge && <span class="font-medium normal-case tracking-normal opacity-90">· no collateral buffer, no liquidation</span>}
+    {!bridge && record.lifecycle === "live" && <span class="font-medium normal-case tracking-normal opacity-90">· {open} open position{open === 1 ? "" : "s"}</span>}
+    {!bridge && record.lifecycle === "proposed" && <span class="font-medium normal-case tracking-normal opacity-90">· no open positions</span>}
   </span>
   <span class={`inline-flex items-center rounded-md border font-bold uppercase tracking-wide ${pad} ${as.cls}`} title="Stage of the risk assessment document — independent of the collateral lifecycle">
     {as.label}

@@ -30,6 +30,8 @@ export interface CollateralSet {
 /** Lifecycle from protocol counts (aggregate endpoint preferred, position feed as fallback). */
 export function deriveLifecycle(live: LiveCollateral | null): CollateralLifecycle {
   if (!live) return "draft";
+  // 1:1 bridge: live while it has ZCHF outstanding and has not expired; closed once expired.
+  if (live.bridge) return live.bridge.expired ? (live.bridge.mintedZchf > 0 ? "live" : "closed") : live.bridge.mintedZchf > 0 ? "live" : "proposed";
   const c = live.counts;
   const open = c ? c.open : live.positions.active;
   const requested = c ? c.requested : 0;
@@ -53,7 +55,14 @@ function issuesFor(a: Assessment | null, live: LiveCollateral | null, lifecycle:
     issues.push({ code: "feed-divergence", severity: "medium", message: live.reconciliation.note ?? "Position feed and protocol aggregate disagree." });
   }
   if (lifecycle === "live" && !a) {
-    issues.push({ code: "no-assessment", severity: "medium", message: "Live collateral without any risk assessment record." });
+    issues.push({ code: "no-assessment", severity: "medium", message: live?.bridge ? "Live 1:1 bridge without any risk assessment of the source stablecoin's issuer." : "Live collateral without any risk assessment record." });
+  }
+  // Peg risk only matters while ZCHF is actually outstanding against the stablecoin.
+  if (live?.bridge && live.bridge.mintedZchf > 0 && live.price && Math.abs(live.price.chf - 1) > 0.01) {
+    issues.push({ code: "bridge-peg", severity: Math.abs(live.price.chf - 1) > 0.03 ? "high" : "medium", message: `The source stablecoin trades at ${live.price.chf.toFixed(3)} CHF (${((live.price.chf - 1) * 100).toFixed(1)} % off its 1:1 peg) while ${Math.round(live.bridge.mintedZchf).toLocaleString("en-CH")} ZCHF is minted against it 1:1.` });
+  }
+  if (live?.bridge?.expired && live.bridge.mintedZchf > 0) {
+    issues.push({ code: "bridge-expired", severity: "low", message: `Bridge horizon passed on ${live.bridge.horizon?.slice(0, 10)}; minting is closed, ${Math.round(live.bridge.mintedZchf).toLocaleString("en-CH")} ZCHF remain redeemable.` });
   }
   if (live?.price?.timestamp) {
     const ageH = (Date.now() - new Date(live.price.timestamp).getTime()) / 3_600_000;
@@ -217,6 +226,10 @@ export function all(): Promise<CollateralSet> {
     } else if (snap.value.degraded.length) {
       warnings.push(`Protocol data partially degraded (${snap.value.degraded.join(", ")}) — affected figures fall back to the position feed.`);
     }
+    if (snap.status === "fulfilled" && snap.value.unmatchedChallenges.length) {
+      const u = snap.value.unmatchedChallenges;
+      warnings.push(`${u.length} challenge${u.length === 1 ? "" : "s"} (${u.map((x) => x.position.slice(0, 10) + "…").join(", ")}) refer${u.length === 1 ? "s" : ""} to a position missing from the position feed and cannot be attributed to a collateral.`);
+    }
     if (idx.status === "rejected" && snap.status === "rejected") throw idx.reason;
 
     const items = idx.status === "fulfilled" ? idx.value.items : [];
@@ -258,6 +271,9 @@ export interface Summary {
   integrityIssues: number;
   /** Largest single collateral by minted ZCHF. */
   concentration: { ticker: string; slug: string; sharePct: number } | null;
+  /** ZCHF minted 1:1 through stablecoin bridges (no collateral buffer). */
+  bridgeMintedZchf: number;
+  liveBridges: number;
   stalePrices: number;
   lastAssessmentDate: string | null;
 }
@@ -293,6 +309,8 @@ export function summarize(records: CollateralRecord[]): Summary {
     integrityIssues: sum(records.map((r) => r.issues.filter((i) => i.severity !== "low").length)),
     concentration: biggest && totalMinted > 0 ? { ticker: biggest.ticker, slug: biggest.slug, sharePct: round((biggest.live!.totalMintedZchf / totalMinted) * 100, 1) } : null,
     stalePrices: records.filter((r) => r.issues.some((i) => i.code === "stale-price")).length,
+    bridgeMintedZchf: round(sum(live.filter((l) => l.bridge).map((l) => l.totalMintedZchf)), 0),
+    liveBridges: records.filter((r) => r.live?.bridge && r.lifecycle === "live").length,
     lastAssessmentDate: dates.at(-1) ?? null,
   };
 }

@@ -51,7 +51,7 @@ const riskKpis = [
 
 // 2. Exposure
 const exposureKpis = [
-  { label: "Minted ZCHF", value: formatCompact(summary.totalMintedZchf), sub: `${formatNumber(summary.activePositions, 0)} open positions against live collateral` },
+  { label: "Minted ZCHF", value: formatCompact(summary.totalMintedZchf), sub: `${formatNumber(summary.activePositions, 0)} open positions · ${formatCompact(summary.bridgeMintedZchf)} of it via ${summary.liveBridges} live 1:1 bridge${summary.liveBridges === 1 ? "" : "s"} (no collateral buffer)` },
   { label: "Oracle-valued collateral", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "collateral quantity × current oracle price", tooltip: "Collateral quantity × current protocol oracle price, summed over open positions" },
   { label: "Remaining aggregate limit", value: formatCompact(summary.totalRemainingLimitZchf), unit: "ZCHF", sub: "additional ZCHF mintable under current limits", tooltip: "Sum over collaterals of total limit − minted" },
   summary.concentration

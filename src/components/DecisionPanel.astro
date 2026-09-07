@@ -47,13 +47,23 @@ const short = (t: string) => t.replace(/ (differs from draft proposal|deviates f
     <div>
       <p class="fc-kv-label">Debt (minted ZCHF)</p>
       <p class="fc-kv-value">{l ? formatCompact(l.totalMintedZchf) : "–"}</p>
-      <p class="fc-kv-unit">{l?.collateralValueChf != null ? `against ${formatCompact(l.collateralValueChf)} CHF oracle-valued collateral` : "no on-chain positions"}</p>
+      <p class="fc-kv-unit">{l?.bridge ? `minted 1:1 against ${l.symbol} · ${formatPercent(l.bridge.limitUsedPct, 1)} of the ${formatCompact(l.bridge.limitZchf)} ZCHF bridge limit` : l?.collateralValueChf != null ? `against ${formatCompact(l.collateralValueChf)} CHF oracle-valued collateral` : "no on-chain positions"}</p>
     </div>
-    <div>
-      <p class="fc-kv-label">Minimum liquidation buffer</p>
-      <p class={`fc-kv-value ${bufferTone}`}>{s ? <a href="#positions-at-risk" class="hover:underline">{formatPercent(s.minLiquidationBufferPct, 1)}</a> : "–"}</p>
-      <p class="fc-kv-unit">{s ? <><a href="#positions-at-risk" class="underline decoration-dotted">{formatCompact(s.debtWithin.pct10)} ZCHF within 10 %</a> of liquidation — click for the positions</> : "no priced positions"}</p>
-    </div>
+    {
+      l?.bridge ? (
+        <div>
+          <p class="fc-kv-label">Backing</p>
+          <p class="fc-kv-value">1 : 1</p>
+          <p class="fc-kv-unit">{l.symbol} held by the bridge · no buffer, no liquidation · <a href="#bridge" class="underline decoration-dotted">how it works</a></p>
+        </div>
+      ) : (
+        <div>
+          <p class="fc-kv-label">Minimum liquidation buffer</p>
+          <p class={`fc-kv-value ${bufferTone}`}>{s ? <a href="#positions-at-risk" class="hover:underline">{formatPercent(s.minLiquidationBufferPct, 1)}</a> : "–"}</p>
+          <p class="fc-kv-unit">{s ? <><a href="#positions-at-risk" class="underline decoration-dotted">{formatCompact(s.debtWithin.pct10)} ZCHF within 10 %</a> of liquidation — click for the positions</> : "no priced positions"}</p>
+        </div>
+      )
+    }
     <div>
       <p class="fc-kv-label">Assessment review</p>
       <p class={`fc-kv-value ${reviewItems.length ? "text-[var(--color-neutral-650)]" : ""}`}>

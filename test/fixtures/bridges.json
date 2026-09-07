@@ -1,0 +1,38 @@
+[
+  {
+    "bridge": "0x3b71ba73299f925a837836160c3e1fec74340403",
+    "message": "VCHF Bridge 2025",
+    "appliedAt": 1745853647,
+    "txHash": "0x218304628d826ae6395569c6b464771053649d25980ce1140e7d7b0d73e50e5a",
+    "ok": true,
+    "horizon": 1776276731,
+    "limitRaw": "2000000000000000000000000",
+    "mintedRaw": "0",
+    "chf": "0x79d4f0232a66c4c91b89c76362016a1707cfbf4f",
+    "fetchedAt": "2026-09-07T14:46:34.315Z"
+  },
+  {
+    "bridge": "0x3e445ff4dddf0ff8ae7458c9746ed80bd664f6c1",
+    "message": "AllUnity CHFAU Stablecoin Bridge",
+    "appliedAt": 1777565003,
+    "txHash": "0xa1b5112f07a7f8b10fd183ad6819c486339874ddd6c5d7ceed92ecf04c64ed39",
+    "ok": true,
+    "horizon": 1807188455,
+    "limitRaw": "10000000000000000000000000",
+    "mintedRaw": "599834296424000000000000",
+    "chf": "0xbd4dfc058eb95b8de5ceaf39966a1a70f5556f78",
+    "fetchedAt": "2026-09-07T14:46:36.698Z"
+  },
+  {
+    "bridge": "0x7bbe8f18040af0032f4c2435e7a76db6f1e346df",
+    "message": "XCHF Bridge",
+    "appliedAt": 1698530891,
+    "txHash": "0x611da737fc70aa5241850d33f2fe9a1688f80816cc22812b56dab934a18449fe",
+    "ok": true,
+    "horizon": 1729980479,
+    "limitRaw": "10000000000000000000000000",
+    "mintedRaw": "17000094858261410",
+    "chf": "0xb4272071ecadd69d933adcd19ca99fe80664fc08",
+    "fetchedAt": "2026-09-07T14:46:38.752Z"
+  }
+]

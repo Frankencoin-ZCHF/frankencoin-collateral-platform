@@ -60,6 +60,7 @@ curl -so test/fixtures/prices.json $A/prices/list
 curl -so test/fixtures/collaterals.json $A/ecosystem/collateral/list
 curl -so test/fixtures/challenges.json $A/challenges/list
 curl -so test/fixtures/stats.json $A/ecosystem/collateral/stats
+# bridges.json (StablecoinBridge minters + on-chain horizon/limit/minted): see scripts/capture-bridges.mjs
 ```
 
 ## License

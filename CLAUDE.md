@@ -63,6 +63,13 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
   from protocol counts — independent of the assessment stage. `issuesFor()` produces integrity
   issues (future date, feed divergence, live without published assessment). `summarize()` feeds the
   KPIs. Unlisted tokens with no active positions (ZEUS/HPS…) are dropped.
+- `src/services/bridges.ts` — **VCHF and CHFAU are not collaterals but 1:1 StablecoinBridge minters** (discovered
+  from Ponder `frankencoinMinters` with "bridge" in the application message; `horizon/limit/minted/chf` read
+  on-chain via `upstream/eth.ts`, offline via `test/fixtures/bridges.json`). Attached as `LiveCollateral.bridge`:
+  the contract is authoritative for minted/limit, there is no safety/utilisation, lifecycle is
+  live/closed(expired)/proposed, and the detail page shows the `bridge` block instead of the position
+  blocks. Risk = source-stablecoin issuer/peg/freeze risk up to `minted`; `bridge-peg` (>1 % off 1 CHF)
+  is a live-queue issue, "expires in ≤60 days" a review item. Selectors are verified by test/bridges.test.ts.
 - `src/services/comparison.ts` — assessed-vs-on-chain with named verdicts (`matches`,
   `within-range`, `differs`, `not-comparable`, `unavailable`) and one-sentence explanations;
   `src/services/attention.ts` turns issues, deviations and near-liquidation debt into the

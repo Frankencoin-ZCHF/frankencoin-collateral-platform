@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@astrojs/node": "^11",
+    "@noble/hashes": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
     "ag-grid-community": "^36.1.0",
     "alpinejs": "^3.17.1",

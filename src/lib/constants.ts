@@ -14,6 +14,8 @@ export const CG_PRO_BASE = "https://pro-api.coingecko.com/api/v3";
 export const CG_PUBLIC_BASE = "https://api.coingecko.com/api/v3";
 export const DEFILLAMA_BASE = "https://api.llama.fi";
 export const APP_URL = "https://app.frankencoin.com";
+/** Public Ethereum JSON-RPC endpoints, tried in order. */
+export const ETH_RPCS = ["https://ethereum-rpc.publicnode.com", "https://eth.llamarpc.com", "https://cloudflare-eth.com", "https://eth.drpc.org"];
 export const ETHERSCAN = "https://etherscan.io";
 
 /** Folders inside the assessments repo, in precedence order when a ticker exists in several. */

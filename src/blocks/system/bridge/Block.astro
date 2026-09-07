@@ -1,0 +1,61 @@
+---
+import type { BridgeData } from "./index";
+import { ETHERSCAN } from "@/lib/constants";
+import { formatCompact, formatDate, formatDateTime, formatNumber, formatPercent, shortAddress } from "@/lib/numbers";
+interface Props {
+  data: BridgeData;
+}
+const { data } = Astro.props as Props;
+const b = data.bridge;
+const used = b.limitUsedPct ?? 0;
+const pegTone = data.pegDeviationPct === null ? "" : Math.abs(data.pegDeviationPct) > 3 ? "text-red-700" : Math.abs(data.pegDeviationPct) > 1 ? "text-amber-700" : "text-emerald-700";
+---
+
+<p class="ty-small text-[var(--color-neutral-650)] mb-4">
+  <strong>{data.symbol} is not a collateralised position.</strong> The <em>{b.name}</em> contract mints one ZCHF for every {data.symbol} deposited into it, up to
+  {formatCompact(b.limitZchf)} ZCHF outstanding, until its horizon on {formatDate(b.horizon)}. Anyone can burn ZCHF at the bridge to get {data.symbol} back 1:1 —
+  also after the horizon. There is no over-collateralisation, no oracle and no liquidation: the ZCHF minted here is backed by the {data.symbol} sitting in the bridge.
+</p>
+
+<div class="fc-kv !grid-cols-2 lg:!grid-cols-4">
+  <div>
+    <p class="fc-kv-label">ZCHF minted through the bridge</p>
+    <p class="fc-kv-value">{formatCompact(b.mintedZchf)}</p>
+    <p class="fc-kv-unit">= {data.symbol} held by the bridge; this is the exposure</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Bridge limit</p>
+    <p class="fc-kv-value">{formatCompact(b.limitZchf)} ZCHF</p>
+    <p class="fc-kv-unit">{formatPercent(b.limitUsedPct, 1)} used · {b.expired ? "minting closed" : `${formatCompact(b.remainingZchf)} still mintable`}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Horizon</p>
+    <p class={`fc-kv-value ${b.expired ? "text-[var(--color-neutral-650)]" : (b.daysLeft ?? 999) <= 60 ? "text-amber-700" : ""}`}>{formatDate(b.horizon)}</p>
+    <p class="fc-kv-unit">{b.expired ? "expired — minting stopped, redemption continues" : `${b.daysLeft} days left, then a new bridge needs governance approval`}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">{data.symbol} price vs 1 CHF</p>
+    <p class={`fc-kv-value ${pegTone}`}>{data.pegPriceChf === null ? "–" : formatNumber(data.pegPriceChf, 3)}</p>
+    <p class="fc-kv-unit">{data.pegDeviationPct === null ? "no price feed" : `${data.pegDeviationPct >= 0 ? "+" : ""}${formatPercent(data.pegDeviationPct, 2)} off peg`}{data.priceSource && ` · ${data.priceSource}`}</p>
+  </div>
+</div>
+
+<div class="mt-4">
+  <p class="fc-kv-label mb-1">Limit usage</p>
+  <div class="h-2 rounded bg-[var(--color-neutral-200)] overflow-hidden"><div class="h-full bg-[var(--color-brand-deep-blue)]" style={`width:${Math.min(100, Math.max(used > 0 ? 1 : 0, used))}%`} /></div>
+</div>
+
+<div class="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+  <p class="ty-small font-bold text-amber-900 mb-1">Where the risk sits</p>
+  <ul class="ty-xs text-amber-900 list-disc pl-5 flex flex-col gap-1">
+    <li><strong>Issuer / credit risk of {data.symbol}:</strong> if the issuer fails, freezes the tokens held by the bridge, or {data.symbol} loses its CHF peg, the {formatCompact(b.mintedZchf)} ZCHF minted here is under-backed by that shortfall. The bridge cannot be liquidated or challenged; the loss would fall on the protocol's reserve.</li>
+    <li><strong>No buffer:</strong> unlike collateralised positions there is no retained reserve, no risk premium and no liquidation buffer — the whole exposure is one-for-one.</li>
+    <li><strong>Freeze handling:</strong> the contract has a credit path (<code>burnAndCredit</code> / <code>payoutCredit</code>) so that, if the issuer freezes the bridge's balance, compliant holders can still be paid out selectively.</li>
+    <li><strong>Horizon:</strong> every bridge expires 52 weeks after deployment; continuing requires a new minter application and governance approval, which is the protocol's periodic chance to re-assess the issuer.</li>
+  </ul>
+</div>
+
+<p class="ty-2xs text-[var(--color-gray-60)] mt-4">
+  Bridge contract <a href={`${ETHERSCAN}/address/${b.address}`} target="_blank" rel="noopener noreferrer" class="font-mono underline">{shortAddress(b.address, 6)}</a> · source stablecoin <a href={`${ETHERSCAN}/token/${b.stablecoin}`} target="_blank" rel="noopener noreferrer" class="font-mono underline">{shortAddress(b.stablecoin, 6)}</a>
+  {b.appliedAt && ` · minter application ${formatDate(b.appliedAt)}`} · minted / limit / horizon read from the contract{data.priceAt && `, price ${formatDateTime(data.priceAt)}`}.
+</p>

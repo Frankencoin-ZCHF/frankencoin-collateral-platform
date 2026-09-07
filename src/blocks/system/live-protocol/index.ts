@@ -7,7 +7,7 @@ const liveProtocol: SystemBlock<LiveCollateral> = {
   title: "On-chain (Ethereum)",
   order: 20,
   span: "half",
-  enabled: (ctx) => ctx.record.live !== null,
+  enabled: (ctx) => ctx.record.live !== null && !ctx.record.live.bridge,
   load: async (ctx) => ctx.record.live,
   Component: Block,
 };

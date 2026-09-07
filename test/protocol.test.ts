@@ -87,9 +87,12 @@ describe("buildSnapshot — aggregates from /ecosystem/collateral/stats", () => 
     expect(s.debtWithin).toEqual({ pct5: 10, pct10: 10, pct20: 10 });
   });
 
-  it("joins challenges through their position", () => {
-    const total = [...snap.values()].reduce((n, c) => n + c.challenges.total, 0);
-    expect(total).toBe(inputs.challenges.length);
+  it("joins challenges through their position and keeps the unattributable ones", async () => {
+    const { unmatched } = await import("@/services/protocol");
+    buildSnapshot(inputs); // refresh the module-level unmatched list for this input set
+    const matched = [...snap.values()].reduce((n, c) => n + c.challenges.total, 0);
+    expect(matched + unmatched.length).toBe(inputs.challenges.length);
+    for (const u of unmatched) expect(inputs.positions.some((p) => p.position.toLowerCase() === u.position.toLowerCase())).toBe(false);
   });
 });
 

@@ -14,6 +14,10 @@ export interface CollateralRow {
   address: string | null;
   kind: "assessed" | "live-only" | "both";
   lifecycle: CollateralLifecycle;
+  /** 1:1 stablecoin bridge (no collateral buffer, no liquidation). */
+  isBridge: boolean;
+  bridgeHorizon: string | null;
+  bridgeLimitUsedPct: number | null;
   status: "draft" | "published" | "deprecated" | "none";
   assessmentUnavailable: boolean;
   assessedOn: string | null;
@@ -81,6 +85,9 @@ export function toRow(r: CollateralRecord): CollateralRow {
     address: r.address,
     kind: r.kind,
     lifecycle: r.lifecycle,
+    isBridge: Boolean(l?.bridge),
+    bridgeHorizon: l?.bridge?.horizon ?? null,
+    bridgeLimitUsedPct: l?.bridge?.limitUsedPct ?? null,
     status: r.assessment?.status ?? "none",
     assessmentUnavailable: Boolean(r.assessmentUnavailable),
     assessedOn: a?.assessmentDate ?? null,

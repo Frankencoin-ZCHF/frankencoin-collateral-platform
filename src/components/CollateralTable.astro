@@ -33,7 +33,7 @@ const { rows } = Astro.props as Props;
               <a href={r.url} class="font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">{r.ticker}</a>
               <span class="block ty-2xs text-[var(--color-gray-60)]">{r.name}</span>
             </td>
-            <td><Pill value={r.lifecycle} /></td>
+            <td><Pill value={r.isBridge ? `${r.lifecycle} · 1:1 bridge` : r.lifecycle} kind={r.lifecycle} /></td>
             <td><Pill value={r.status === "none" ? (r.assessmentUnavailable ? "unavailable" : "none") : r.status} kind={r.status === "none" && r.assessmentUnavailable ? "neutral" : r.status} /></td>
             <td>
               {r.liveRiskState === "ok" ? (
@@ -43,7 +43,7 @@ const { rows } = Astro.props as Props;
               )}
             </td>
             <td class="fc-num">{formatCompact(r.mintedZchf)}</td>
-            <td class={`fc-num ${r.minLiquidationBufferPct != null && r.minLiquidationBufferPct < 5 ? "text-red-700" : ""}`}>{formatPercent(r.minLiquidationBufferPct, 1)}</td>
+            <td class={`fc-num ${r.minLiquidationBufferPct != null && r.minLiquidationBufferPct < 5 ? "text-red-700" : ""}`}>{r.isBridge ? <span class="ty-2xs text-[var(--color-gray-60)]">n/a (1:1)</span> : formatPercent(r.minLiquidationBufferPct, 1)}</td>
             <td class="fc-num">{r.positionsOpen ?? "–"}</td>
             <td class="fc-num">{formatPrice(r.priceChf)}</td>
             <td class="fc-num">{r.reviewCount ? <a href={r.attentionUrl} class="fc-pill fc-pill-neutral" title={r.review.join("\n")}>{r.reviewCount}</a> : "–"}</td>

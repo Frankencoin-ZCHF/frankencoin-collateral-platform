@@ -190,7 +190,29 @@ export interface PositionSafety {
   positionsConsidered: number;
 }
 
+/**
+ * A 1:1 stablecoin bridge (StablecoinBridge minter). Not a collateralised position: ZCHF is
+ * minted one-for-one against a trusted CHF stablecoin held in the contract, up to `limit`,
+ * until `horizon`. Burning/redeeming keeps working after the horizon.
+ */
+export interface Bridge {
+  address: string;
+  name: string;
+  /** Source stablecoin contract (lowercase). */
+  stablecoin: string;
+  appliedAt: string | null;
+  horizon: string | null;
+  expired: boolean;
+  daysLeft: number | null;
+  limitZchf: number;
+  mintedZchf: number;
+  remainingZchf: number;
+  limitUsedPct: number | null;
+}
+
 export interface LiveCollateral {
+  /** Set when this "collateral" is actually a 1:1 stablecoin bridge minter. */
+  bridge: Bridge | null;
   address: string;
   chainId: number;
   chainName: string;
@@ -238,7 +260,7 @@ export type CollateralKind = "assessed" | "live-only" | "both";
 export type CollateralLifecycle = "draft" | "proposed" | "live" | "closed" | "denied";
 
 export interface IntegrityIssue {
-  code: "address-mismatch" | "feed-divergence" | "no-assessment" | "stale-price" | "assessment-unavailable";
+  code: "address-mismatch" | "feed-divergence" | "no-assessment" | "stale-price" | "assessment-unavailable" | "bridge-peg" | "bridge-expired";
   severity: "high" | "medium" | "low";
   message: string;
 }

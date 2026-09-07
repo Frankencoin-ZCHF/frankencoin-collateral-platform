@@ -6,6 +6,7 @@
 import type { SystemBlock } from "./types";
 
 import riskSummary from "./system/risk-summary";
+import bridge from "./system/bridge";
 import liveProtocol from "./system/live-protocol";
 import positionSafety from "./system/position-safety";
 import riskParameters from "./system/risk-parameters";
@@ -20,6 +21,7 @@ import versions from "./system/versions";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const SYSTEM_BLOCKS: SystemBlock<any>[] = [
   riskSummary,
+  bridge,
   liveProtocol,
   positionSafety,
   riskParameters,

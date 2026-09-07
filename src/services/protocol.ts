@@ -16,7 +16,8 @@ import { describeForLog } from "@/lib/errors";
 import { fromWei, isoFromUnix, ppmToPercent, round, sum, weightedAverage } from "@/lib/numbers";
 import { getOrLoad, TTL } from "@/lib/cache";
 import * as api from "@/upstream/frankencoin";
-import type { Challenge, LiveCollateral, Position, PositionCounts, PositionSafety, Reconciliation } from "@/types";
+import type { Bridge, Challenge, LiveCollateral, Position, PositionCounts, PositionSafety, Reconciliation } from "@/types";
+import { bridgesByStablecoin } from "./bridges";
 
 export interface ProtocolSnapshot {
   byAddress: Map<string, LiveCollateral>;
@@ -25,6 +26,8 @@ export interface ProtocolSnapshot {
   degraded: string[];
   /** Protocol-wide TVL from the aggregate endpoint. */
   totalValueLockedChf: number | null;
+  /** Challenges whose position is not in the position feed (still real liquidation events). */
+  unmatchedChallenges: Challenge[];
 }
 
 export interface Inputs {
@@ -33,6 +36,8 @@ export interface Inputs {
   collaterals: api.ApiCollateral[];
   challenges: api.ApiChallenge[];
   stats: Record<string, api.ApiCollateralStats> | null;
+  /** 1:1 stablecoin bridges keyed by source-stablecoin address. */
+  bridges?: Map<string, Bridge>;
   now?: number;
 }
 
@@ -131,8 +136,11 @@ export function computeSafety(active: Position[], priceChf: number | null): Posi
   };
 }
 
+/** Challenges that could not be attributed to a collateral in the last buildSnapshot() (module-level, read by snapshot()). */
+export const unmatched: Challenge[] = [];
+
 /** Pure: build the per-collateral map from raw API payloads. Exported for tests. */
-export function buildSnapshot({ positions, prices, collaterals, challenges, stats: statsMap, now = Date.now() / 1000 }: Inputs): Map<string, LiveCollateral> {
+export function buildSnapshot({ positions, prices, collaterals, challenges, stats: statsMap, bridges = new Map(), now = Date.now() / 1000 }: Inputs): Map<string, LiveCollateral> {
   const priceMap = new Map<string, api.ApiPrice>();
   for (const p of prices) if (p.chainId === 1 || p.chainId === undefined) priceMap.set(p.address.toLowerCase(), p);
 
@@ -163,9 +171,13 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, stat
   const positionToCollateral = new Map<string, string>();
   for (const p of positions) positionToCollateral.set(p.position.toLowerCase(), p.collateral.toLowerCase());
   const challengesByCollateral = new Map<string, api.ApiChallenge[]>();
+  unmatched.length = 0;
   for (const c of challenges) {
     const addr = positionToCollateral.get(c.position.toLowerCase());
-    if (!addr) continue;
+    if (!addr) {
+      unmatched.push(mapChallenge(c, 18, now));
+      continue;
+    }
     if (!challengesByCollateral.has(addr)) challengesByCollateral.set(addr, []);
     challengesByCollateral.get(addr)!.push(c);
   }
@@ -178,6 +190,7 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, stat
     const priceChf = typeof priceEntry?.price?.chf === "number" ? priceEntry.price.chf : typeof s?.price?.chf === "number" ? s.price.chf : null;
     const priceUsd = typeof priceEntry?.price?.usd === "number" ? priceEntry.price.usd : typeof s?.price?.usd === "number" ? s.price.usd : null;
 
+    const bridge = bridges.get(addr) ?? null;
     const list = (grouped.get(addr) ?? [])
       .map((p) => mapPosition(p, decimals, priceChf))
       .sort((a, b) => b.minted - a.minted || b.collateralBalance - a.collateralBalance);
@@ -187,15 +200,17 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, stat
     const collateralFromPositions = sum(active.map((p) => p.collateralBalance));
 
     // Headline figures: aggregate endpoint when present, position feed otherwise.
-    const totalMinted = s ? s.totalMinted : mintedFromPositions;
-    const totalLimit = s ? s.totalLimit : null;
+    // For a 1:1 bridge the contract itself is authoritative (minted / limit / horizon).
+    const totalMinted = bridge ? bridge.mintedZchf : s ? s.totalMinted : mintedFromPositions;
+    const totalLimit = bridge ? bridge.limitZchf : s ? s.totalLimit : null;
     const totalCollateral = s ? fromWei(s.totalBalanceRaw, decimals) : collateralFromPositions;
     const valueChf = s ? s.totalValueLocked.chf : priceChf !== null ? collateralFromPositions * priceChf : null;
 
     const counts: PositionCounts | null = s ? { ...s.positions } : null;
     const expected = counts ? counts.open : null;
-    const mintedDiverges = s ? Math.abs(s.totalMinted - mintedFromPositions) > Math.max(1, s.totalMinted) * 0.01 : false;
-    const countDiverges = expected !== null && expected !== active.length;
+    // Bridges have no positions in the feed by design — the aggregate models them as one pseudo-position.
+    const mintedDiverges = !bridge && s ? Math.abs(s.totalMinted - mintedFromPositions) > Math.max(1, s.totalMinted) * 0.01 : false;
+    const countDiverges = !bridge && expected !== null && expected !== active.length;
     const reconciliation: Reconciliation = {
       aggregateSource: s ? "stats" : "positions",
       positionsInFeed: active.length,
@@ -214,6 +229,7 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, stat
     const expiries = active.map((p) => p.expiresAt).filter((d): d is string => d !== null && new Date(d).getTime() / 1000 > now).sort();
 
     out.set(addr, {
+      bridge,
       address: addr,
       chainId: m.chainId ?? 1,
       chainName: chainName(m.chainId ?? 1),
@@ -235,12 +251,12 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, stat
       counts,
       totalMintedZchf: round(totalMinted, 2),
       totalLimitZchf: totalLimit !== null ? round(totalLimit, 2) : null,
-      remainingLimitZchf: totalLimit !== null ? round(Math.max(0, totalLimit - totalMinted), 2) : null,
+      remainingLimitZchf: bridge ? bridge.remainingZchf : totalLimit !== null ? round(Math.max(0, totalLimit - totalMinted), 2) : null,
       totalCollateral: round(totalCollateral, 6),
       collateralValueChf: valueChf !== null ? round(valueChf, 2) : null,
-      utilizationPct: valueChf && valueChf > 0 ? round((totalMinted / valueChf) * 100, 1) : null,
+      utilizationPct: bridge ? null : valueChf && valueChf > 0 ? round((totalMinted / valueChf) * 100, 1) : null,
       reconciliation,
-      safety: computeSafety(active, priceChf),
+      safety: bridge ? null : computeSafety(active, priceChf),
       riskPremiumPct: stats(active, (p) => p.riskPremiumPct),
       annualInterestPct: stats(active, (p) => p.annualInterestPct),
       reserveContributionPct: stats(active, (p) => p.reserveContributionPct),
@@ -258,12 +274,13 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, stat
 /** Cached snapshot from live endpoints. Positions are required; the rest degrade (stats degrading is flagged loudly). */
 export function snapshot(): Promise<ProtocolSnapshot> {
   return getOrLoad("svc:protocol:snapshot", TTL.MINUTE, async () => {
-    const [positions, prices, collaterals, challenges, statsRes] = await Promise.allSettled([
+    const [positions, prices, collaterals, challenges, statsRes, bridgesRes] = await Promise.allSettled([
       api.positionList(),
       api.priceList(),
       api.collateralList(),
       api.challengeList(),
       api.collateralStats(),
+      bridgesByStablecoin(),
     ]);
     if (positions.status === "rejected") throw positions.reason;
 
@@ -282,7 +299,8 @@ export function snapshot(): Promise<ProtocolSnapshot> {
       collaterals: take(collaterals, "collaterals", { num: 0, list: [] }).list ?? [],
       challenges: take(challenges, "challenges", { num: 0, list: [] }).list ?? [],
       stats: statsPayload?.map ?? null,
+      bridges: take(bridgesRes, "bridges", new Map<string, Bridge>()),
     });
-    return { byAddress, fetchedAt: new Date().toISOString(), degraded, totalValueLockedChf: statsPayload?.totalValueLocked?.chf ?? null };
+    return { byAddress, fetchedAt: new Date().toISOString(), degraded, totalValueLockedChf: statsPayload?.totalValueLocked?.chf ?? null, unmatchedChallenges: [...unmatched] };
   }, { swrMs: 5 * TTL.MINUTE });
 }

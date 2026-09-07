@@ -47,6 +47,8 @@ const ISSUE_TITLE: Record<string, string> = {
   "no-assessment": "Live collateral without any assessment",
   "stale-price": "Stale price feed",
   "assessment-unavailable": "Assessment could not be loaded",
+  "bridge-peg": "Bridge stablecoin off its 1:1 peg",
+  "bridge-expired": "Bridge expired with ZCHF outstanding",
 };
 
 /** All items for one record, both queues. */
@@ -56,7 +58,8 @@ export function itemsFor(r: CollateralRecord): AttentionItem[] {
   // Integrity issues are live-queue by definition (they are computed only for defined defects).
   for (const i of r.issues) {
     if (i.severity === "low") continue;
-    items.push({ queue: "live", severity: i.severity, title: ISSUE_TITLE[i.code] ?? i.code, detail: i.message, assessed: null, live: null });
+    const title = i.code === "no-assessment" && r.live?.bridge ? "Live 1:1 bridge without an assessment of the issuer" : ISSUE_TITLE[i.code] ?? i.code;
+    items.push({ queue: "live", severity: i.severity, title, detail: i.message, assessed: null, live: null });
   }
 
   const s = r.live?.safety;
@@ -90,6 +93,11 @@ export function itemsFor(r: CollateralRecord): AttentionItem[] {
         live: row.onchain.replace(/\s*\(positions range[^)]*\)$/, ""),
       });
     }
+  }
+
+  const b = r.live?.bridge;
+  if (b && !b.expired && b.daysLeft !== null && b.daysLeft <= 60) {
+    items.push({ queue: "review", severity: "low", title: `Bridge expires in ${b.daysLeft} days`, detail: `Minting through this bridge stops on ${b.horizon?.slice(0, 10)}; a replacement bridge needs a new minter application and governance approval. Redemption continues after the horizon.`, assessed: null, live: `${Math.round(b.mintedZchf).toLocaleString("en-CH")} ZCHF outstanding` });
   }
 
   if (r.assessment && !r.assessment.data.discussionUrl) {
