@@ -1,0 +1,81 @@
+---
+/* Compact decision panel: the first five questions, answered on one card, with separate clocks
+   for the assessment snapshot and the live protocol state. */
+import type { BlockContext } from "@/blocks/types";
+import LifecycleBadges from "./LifecycleBadges.astro";
+import { formatCompact, formatDate, formatDateTime, formatPercent } from "@/lib/numbers";
+import { compareParameters } from "@/services/comparison";
+
+interface Props {
+  ctx: BlockContext;
+  protocolFetchedAt: string | null;
+  protocolDegraded: string[];
+}
+const { ctx, protocolFetchedAt, protocolDegraded } = Astro.props as Props;
+const { record, assessment, version } = ctx;
+const l = record.live;
+const s = l?.safety ?? null;
+const rows = assessment ? compareParameters(assessment.data.params, l) : [];
+const differs = rows.filter((r) => r.verdict === "differs");
+const highIssues = record.issues.filter((i) => i.severity !== "low");
+const bufferTone = s?.minLiquidationBufferPct == null ? "" : s.minLiquidationBufferPct < 5 ? "text-red-700" : s.minLiquidationBufferPct < 15 ? "text-amber-700" : "text-emerald-700";
+---
+
+<section class="fc-card p-5 flex flex-col gap-4" aria-label="Decision summary">
+  <LifecycleBadges record={record} size="lg" />
+
+  {
+    assessment?.status === "draft" && (
+      <p class="ty-small text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+        <strong>Draft assessment — under review.</strong> The collateral lifecycle and live protocol settings are shown separately. This assessment is not itself a governance decision or an approved parameter set.
+      </p>
+    )
+  }
+
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div>
+      <p class="fc-kv-label">Debt (minted ZCHF)</p>
+      <p class="fc-kv-value">{l ? formatCompact(l.totalMintedZchf) : "–"}</p>
+      <p class="fc-kv-unit">{l?.collateralValueChf != null ? `against ${formatCompact(l.collateralValueChf)} CHF oracle-valued collateral` : "no on-chain positions"}</p>
+    </div>
+    <div>
+      <p class="fc-kv-label">Minimum liquidation buffer</p>
+      <p class={`fc-kv-value ${bufferTone}`}>{s ? formatPercent(s.minLiquidationBufferPct, 1) : "–"}</p>
+      <p class="fc-kv-unit">{s ? `${formatCompact(s.debtWithin.pct10)} ZCHF within 10 % of liquidation` : "no priced positions"}</p>
+    </div>
+    <div>
+      <p class="fc-kv-label">Deviations from assessment</p>
+      <p class={`fc-kv-value ${differs.length ? "text-amber-700" : highIssues.length ? "text-amber-700" : ""}`}>{assessment ? differs.length + highIssues.length : "–"}</p>
+      <p class="fc-kv-unit">{assessment ? (differs.length || highIssues.length ? [...differs.map((d) => d.label), ...highIssues.map((i) => i.code.replace(/-/g, " "))].join(", ") : "none requiring attention") : "no assessment to compare"}</p>
+    </div>
+    <div>
+      <p class="fc-kv-label">Governance reference</p>
+      <p class="fc-kv-value">
+        {assessment?.data.discussionUrl ? <a href={assessment.data.discussionUrl} target="_blank" rel="noopener noreferrer" class="underline text-[var(--color-blue-39)]">Discussion ↗</a> : <span class="text-[var(--color-gray-60)]">not linked</span>}
+      </p>
+      <p class="fc-kv-unit">approval / review data is not yet published by the protocol</p>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-[var(--color-gray-20)] pt-3 ty-xs text-[var(--color-gray-75)]">
+    <div>
+      <span class="fc-kv-label">Assessment snapshot</span>
+      {
+        assessment ? (
+          <p>
+            authored {formatDate(assessment.data.assessmentDate)} by <span class="font-bold text-[var(--color-neutral-700)]">{assessment.data.author}</span> · {assessment.status}
+            {version && <> · version <span class="font-mono">{version.shortSha}</span> committed {formatDateTime(version.date)}</>}
+          </p>
+        ) : (
+          <p>none — this collateral has no risk assessment in the repository.</p>
+        )
+      }
+    </div>
+    <div>
+      <span class="fc-kv-label">Live protocol state</span>
+      <p>
+        {l ? <>Ethereum · api.frankencoin.com · fetched {formatDateTime(protocolFetchedAt)} · refreshes every minute{protocolDegraded.length > 0 && <span class="text-amber-700"> · degraded: {protocolDegraded.join(", ")}</span>}</> : "no on-chain data for this contract"}
+      </p>
+    </div>
+  </div>
+</section>

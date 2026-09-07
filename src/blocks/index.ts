@@ -7,6 +7,7 @@ import type { SystemBlock } from "./types";
 
 import riskSummary from "./system/risk-summary";
 import liveProtocol from "./system/live-protocol";
+import positionSafety from "./system/position-safety";
 import riskParameters from "./system/risk-parameters";
 import tailRisks from "./system/tail-risks";
 import narrative from "./system/narrative";
@@ -20,6 +21,7 @@ import versions from "./system/versions";
 export const SYSTEM_BLOCKS: SystemBlock<any>[] = [
   riskSummary,
   liveProtocol,
+  positionSafety,
   riskParameters,
   tailRisks,
   narrative,

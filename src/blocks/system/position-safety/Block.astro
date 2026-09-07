@@ -1,0 +1,50 @@
+---
+import type { PositionSafetyData } from "./index";
+import { formatCompact, formatPercent } from "@/lib/numbers";
+interface Props {
+  data: PositionSafetyData;
+}
+const { data } = Astro.props as Props;
+const s = data.safety;
+const maxBand = Math.max(1, ...data.bands.map((b) => b.minted));
+const tone = (pct: number | null) => (pct === null ? "" : pct < 5 ? "text-red-700" : pct < 15 ? "text-amber-700" : "text-emerald-700");
+---
+
+<div class="fc-kv !grid-cols-2">
+  <div>
+    <p class="fc-kv-label">Weighted collateralisation</p>
+    <p class="fc-kv-value">{formatPercent(s.weightedCollateralRatioPct, 0)}</p>
+    <p class="fc-kv-unit">oracle-valued collateral ÷ debt, minted-weighted</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Minimum liquidation buffer</p>
+    <p class={`fc-kv-value ${tone(s.minLiquidationBufferPct)}`}>{formatPercent(s.minLiquidationBufferPct, 1)}</p>
+    <p class="fc-kv-unit">price drop until the riskiest position is challengeable · median {formatPercent(s.medianLiquidationBufferPct, 1)}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Debt within 10 % of liquidation</p>
+    <p class={`fc-kv-value ${s.debtWithin.pct10 > 0 ? "text-amber-700" : ""}`}>{formatCompact(s.debtWithin.pct10)} ZCHF</p>
+    <p class="fc-kv-unit">within 5 %: {formatCompact(s.debtWithin.pct5)} · within 20 %: {formatCompact(s.debtWithin.pct20)}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Positions considered</p>
+    <p class="fc-kv-value">{s.positionsConsidered}</p>
+    <p class="fc-kv-unit">active, with debt, at {formatCompact(data.priceChf)} CHF / {data.symbol}</p>
+  </div>
+</div>
+<div class="mt-4">
+  <p class="fc-kv-label mb-2">Debt by liquidation buffer</p>
+  <ul class="flex flex-col gap-1">
+    {
+      data.bands.map((b) => (
+        <li class="flex items-center gap-2 ty-xs">
+          <span class="w-16 shrink-0 tabular-nums">{b.label}</span>
+          <span class="flex-1 h-2 rounded bg-[var(--color-neutral-200)] overflow-hidden">
+            <span class="block h-full bg-[var(--color-brand-deep-blue)]" style={`width:${b.minted > 0 ? Math.max(2, (b.minted / maxBand) * 100) : 0}%`} />
+          </span>
+          <span class="w-20 text-right tabular-nums">{b.minted > 0 ? formatCompact(b.minted) : "–"}</span>
+        </li>
+      ))
+    }
+  </ul>
+</div>

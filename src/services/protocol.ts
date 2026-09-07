@@ -1,30 +1,38 @@
 /**
- * Live protocol data per collateral, computed by grouping every minting position
- * (V1 + V2, from /positions/list) by collateral address and joining prices and
- * challenges. Ponder's aggregates are per chain, so this grouping is the only way to
- * get per-collateral figures.
+ * Live protocol data per collateral.
+ *
+ * Headline figures (minted, aggregate limit, remaining capacity, position counts, TVL)
+ * come from the protocol's authoritative aggregate endpoint, /ecosystem/collateral/stats.
+ * The position feed (/positions/list, V1 + V2) is grouped by collateral for the position
+ * table and for position-safety metrics, and is reconciled against the aggregate: any
+ * material divergence is flagged rather than hidden.
+ *
+ * Never derive protocol-wide capacity by summing position-level clone fields: every clone
+ * repeats its parent's availableForClones, so the sum overstates by the number of clones.
  */
 
-import { APP_URL } from "@/lib/constants";
-import { chainName } from "@/lib/constants";
+import { APP_URL, chainName } from "@/lib/constants";
 import { describeForLog } from "@/lib/errors";
 import { fromWei, isoFromUnix, ppmToPercent, round, sum, weightedAverage } from "@/lib/numbers";
 import { getOrLoad, TTL } from "@/lib/cache";
 import * as api from "@/upstream/frankencoin";
-import type { Challenge, LiveCollateral, Position } from "@/types";
+import type { Challenge, LiveCollateral, Position, PositionCounts, PositionSafety, Reconciliation } from "@/types";
 
 export interface ProtocolSnapshot {
   byAddress: Map<string, LiveCollateral>;
   fetchedAt: string;
   /** Sources that failed (data for them is degraded, not missing entirely). */
   degraded: string[];
+  /** Protocol-wide TVL from the aggregate endpoint. */
+  totalValueLockedChf: number | null;
 }
 
-interface Inputs {
+export interface Inputs {
   positions: api.ApiPosition[];
   prices: api.ApiPrice[];
   collaterals: api.ApiCollateral[];
   challenges: api.ApiChallenge[];
+  stats: Record<string, api.ApiCollateralStats> | null;
   now?: number;
 }
 
@@ -99,32 +107,61 @@ function range(values: number[]): { min: number; max: number } | null {
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 
+function median(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid]! : (s[mid - 1]! + s[mid]!) / 2;
+}
+
+/** Exported for tests. */
+export function computeSafety(active: Position[], priceChf: number | null): PositionSafety | null {
+  if (priceChf === null || priceChf <= 0) return null;
+  const considered = active.filter((p) => p.minted > 0 && p.liquidationPriceZchf > 0);
+  if (considered.length === 0) return null;
+  const buffers = considered.map((p) => ({ p, bufferPct: ((priceChf - p.liquidationPriceZchf) / priceChf) * 100 }));
+  const within = (pct: number) => round(sum(buffers.filter((b) => b.bufferPct <= pct).map((b) => b.p.minted)), 2);
+  const ratio = weightedAverage(considered.filter((p) => p.collateralRatioPct !== null).map((p) => [p.collateralRatioPct!, p.minted]));
+  return {
+    weightedCollateralRatioPct: ratio === null ? null : round(ratio, 1),
+    minLiquidationBufferPct: round(Math.min(...buffers.map((b) => b.bufferPct)), 1),
+    medianLiquidationBufferPct: round(median(buffers.map((b) => b.bufferPct)) ?? 0, 1),
+    debtWithin: { pct5: within(5), pct10: within(10), pct20: within(20) },
+    positionsConsidered: considered.length,
+  };
+}
+
 /** Pure: build the per-collateral map from raw API payloads. Exported for tests. */
-export function buildSnapshot({ positions, prices, collaterals, challenges, now = Date.now() / 1000 }: Inputs): Map<string, LiveCollateral> {
+export function buildSnapshot({ positions, prices, collaterals, challenges, stats: statsMap, now = Date.now() / 1000 }: Inputs): Map<string, LiveCollateral> {
   const priceMap = new Map<string, api.ApiPrice>();
   for (const p of prices) if (p.chainId === 1 || p.chainId === undefined) priceMap.set(p.address.toLowerCase(), p);
 
-  const collateralMeta = new Map<string, api.ApiCollateral>();
+  // Metadata: the aggregate endpoint first, then the list, then whatever the position feed says.
+  const meta = new Map<string, api.ApiCollateral>();
   const listed = new Set<string>();
+  const statsByAddr = new Map<string, api.ApiCollateralStats>();
+  for (const [addr, s] of Object.entries(statsMap ?? {})) {
+    const a = addr.toLowerCase();
+    statsByAddr.set(a, s);
+    meta.set(a, { chainId: s.chainId, address: s.address, name: s.name, symbol: s.symbol, decimals: s.decimals });
+    listed.add(a);
+  }
   for (const c of collaterals) {
-    collateralMeta.set(c.address.toLowerCase(), c);
-    listed.add(c.address.toLowerCase());
+    const a = c.address.toLowerCase();
+    if (!meta.has(a)) meta.set(a, c);
+    listed.add(a);
   }
 
-  // Group positions by collateral; pick up metadata for collaterals the list doesn't know.
   const grouped = new Map<string, api.ApiPosition[]>();
   for (const p of positions) {
     const addr = p.collateral.toLowerCase();
     if (!grouped.has(addr)) grouped.set(addr, []);
     grouped.get(addr)!.push(p);
-    if (!collateralMeta.has(addr)) {
-      collateralMeta.set(addr, { chainId: 1, address: p.collateral, name: p.collateralName, symbol: p.collateralSymbol, decimals: p.collateralDecimals });
-    }
+    if (!meta.has(addr)) meta.set(addr, { chainId: 1, address: p.collateral, name: p.collateralName, symbol: p.collateralSymbol, decimals: p.collateralDecimals });
   }
 
   const positionToCollateral = new Map<string, string>();
   for (const p of positions) positionToCollateral.set(p.position.toLowerCase(), p.collateral.toLowerCase());
-
   const challengesByCollateral = new Map<string, api.ApiChallenge[]>();
   for (const c of challenges) {
     const addr = positionToCollateral.get(c.position.toLowerCase());
@@ -134,36 +171,59 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, now 
   }
 
   const out = new Map<string, LiveCollateral>();
-  for (const [addr, meta] of collateralMeta) {
-    const decimals = meta.decimals ?? 18;
+  for (const [addr, m] of meta) {
+    const decimals = m.decimals ?? 18;
+    const s = statsByAddr.get(addr) ?? null;
     const priceEntry = priceMap.get(addr);
-    const priceChf = typeof priceEntry?.price?.chf === "number" ? priceEntry.price.chf : null;
-    const priceUsd = typeof priceEntry?.price?.usd === "number" ? priceEntry.price.usd : null;
+    const priceChf = typeof priceEntry?.price?.chf === "number" ? priceEntry.price.chf : typeof s?.price?.chf === "number" ? s.price.chf : null;
+    const priceUsd = typeof priceEntry?.price?.usd === "number" ? priceEntry.price.usd : typeof s?.price?.usd === "number" ? s.price.usd : null;
 
     const list = (grouped.get(addr) ?? [])
       .map((p) => mapPosition(p, decimals, priceChf))
       .sort((a, b) => b.minted - a.minted || b.collateralBalance - a.collateralBalance);
     const active = list.filter((p) => p.status === "active");
 
-    const totalCollateral = sum(active.map((p) => p.collateralBalance));
-    const totalMinted = sum(active.map((p) => p.minted));
-    const valueChf = priceChf !== null ? totalCollateral * priceChf : null;
+    const mintedFromPositions = round(sum(active.map((p) => p.minted)), 2);
+    const collateralFromPositions = sum(active.map((p) => p.collateralBalance));
+
+    // Headline figures: aggregate endpoint when present, position feed otherwise.
+    const totalMinted = s ? s.totalMinted : mintedFromPositions;
+    const totalLimit = s ? s.totalLimit : null;
+    const totalCollateral = s ? fromWei(s.totalBalanceRaw, decimals) : collateralFromPositions;
+    const valueChf = s ? s.totalValueLocked.chf : priceChf !== null ? collateralFromPositions * priceChf : null;
+
+    const counts: PositionCounts | null = s ? { ...s.positions } : null;
+    const expected = counts ? counts.open : null;
+    const mintedDiverges = s ? Math.abs(s.totalMinted - mintedFromPositions) > Math.max(1, s.totalMinted) * 0.01 : false;
+    const countDiverges = expected !== null && expected !== active.length;
+    const reconciliation: Reconciliation = {
+      aggregateSource: s ? "stats" : "positions",
+      positionsInFeed: active.length,
+      positionsExpected: expected,
+      mintedFromPositions,
+      mintedFromStats: s ? s.totalMinted : null,
+      divergent: mintedDiverges || countDiverges,
+      note: countDiverges
+        ? `The protocol reports ${expected} open position${expected === 1 ? "" : "s"} but the position feed lists ${active.length}; headline figures use the protocol aggregate.`
+        : mintedDiverges
+          ? `Minted ZCHF differs between the aggregate (${round(s!.totalMinted, 0)}) and the position feed (${round(mintedFromPositions, 0)}); headline figures use the aggregate.`
+          : null,
+    };
 
     const chal = (challengesByCollateral.get(addr) ?? []).map((c) => mapChallenge(c, decimals, now)).sort((a, b) => (b.startedAt ?? "").localeCompare(a.startedAt ?? ""));
-
     const expiries = active.map((p) => p.expiresAt).filter((d): d is string => d !== null && new Date(d).getTime() / 1000 > now).sort();
 
     out.set(addr, {
       address: addr,
-      chainId: meta.chainId ?? 1,
-      chainName: chainName(meta.chainId ?? 1),
-      symbol: meta.symbol?.trim() || addr.slice(0, 8),
-      name: meta.name?.trim() || `Unknown token ${addr.slice(0, 8)}`,
+      chainId: m.chainId ?? 1,
+      chainName: chainName(m.chainId ?? 1),
+      symbol: m.symbol?.trim() || addr.slice(0, 8),
+      name: m.name?.trim() || `Unknown token ${addr.slice(0, 8)}`,
       decimals,
       listed: listed.has(addr),
       price:
         priceChf !== null && priceUsd !== null
-          ? { chf: priceChf, usd: priceUsd, source: priceEntry?.source ?? null, timestamp: priceEntry?.timestamp ? new Date(priceEntry.timestamp).toISOString() : null }
+          ? { chf: priceChf, usd: priceUsd, source: priceEntry?.source ?? (s ? "protocol-aggregate" : null), timestamp: priceEntry?.timestamp ? new Date(priceEntry.timestamp).toISOString() : null }
           : null,
       positions: {
         total: list.length,
@@ -172,11 +232,15 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, now 
         denied: list.filter((p) => p.status === "denied").length,
         list,
       },
+      counts,
       totalMintedZchf: round(totalMinted, 2),
+      totalLimitZchf: totalLimit !== null ? round(totalLimit, 2) : null,
+      remainingLimitZchf: totalLimit !== null ? round(Math.max(0, totalLimit - totalMinted), 2) : null,
       totalCollateral: round(totalCollateral, 6),
       collateralValueChf: valueChf !== null ? round(valueChf, 2) : null,
-      availableForMintingZchf: round(sum(active.map((p) => p.availableForClones + p.availableForMinting)), 2),
       utilizationPct: valueChf && valueChf > 0 ? round((totalMinted / valueChf) * 100, 1) : null,
+      reconciliation,
+      safety: computeSafety(active, priceChf),
       riskPremiumPct: stats(active, (p) => p.riskPremiumPct),
       annualInterestPct: stats(active, (p) => p.annualInterestPct),
       reserveContributionPct: stats(active, (p) => p.reserveContributionPct),
@@ -191,14 +255,15 @@ export function buildSnapshot({ positions, prices, collaterals, challenges, now 
   return out;
 }
 
-/** Cached snapshot from live endpoints. Positions are required; the rest degrade. */
+/** Cached snapshot from live endpoints. Positions are required; the rest degrade (stats degrading is flagged loudly). */
 export function snapshot(): Promise<ProtocolSnapshot> {
   return getOrLoad("svc:protocol:snapshot", TTL.MINUTE, async () => {
-    const [positions, prices, collaterals, challenges] = await Promise.allSettled([
+    const [positions, prices, collaterals, challenges, statsRes] = await Promise.allSettled([
       api.positionList(),
       api.priceList(),
       api.collateralList(),
       api.challengeList(),
+      api.collateralStats(),
     ]);
     if (positions.status === "rejected") throw positions.reason;
 
@@ -210,12 +275,14 @@ export function snapshot(): Promise<ProtocolSnapshot> {
       return fallback;
     };
 
+    const statsPayload = take(statsRes, "collateral-stats", null as null | Awaited<ReturnType<typeof api.collateralStats>>);
     const byAddress = buildSnapshot({
       positions: positions.value.list ?? [],
       prices: take(prices, "prices", [] as api.ApiPrice[]),
       collaterals: take(collaterals, "collaterals", { num: 0, list: [] }).list ?? [],
       challenges: take(challenges, "challenges", { num: 0, list: [] }).list ?? [],
+      stats: statsPayload?.map ?? null,
     });
-    return { byAddress, fetchedAt: new Date().toISOString(), degraded };
+    return { byAddress, fetchedAt: new Date().toISOString(), degraded, totalValueLockedChf: statsPayload?.totalValueLocked?.chf ?? null };
   }, { swrMs: 5 * TTL.MINUTE });
 }

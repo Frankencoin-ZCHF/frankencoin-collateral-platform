@@ -63,9 +63,10 @@ function mapCommit(c: RawCommit): CommitInfo {
   };
 }
 
-/** Full recursive tree of the repo at `ref`. */
+/** Full recursive tree of the repo at `ref` (a commit sha → immutable, cached for a day). */
 export function tree(repo: string, ref: string): Promise<{ sha: string; truncated: boolean; entries: TreeEntry[] }> {
-  return getOrLoad(`gh:tree:${repo}@${ref}`, 5 * TTL.MINUTE, async () => {
+  const immutable = /^[0-9a-f]{40}$/.test(ref);
+  return getOrLoad(`gh:tree:${repo}@${ref}`, immutable ? TTL.DAY : 5 * TTL.MINUTE, async () => {
     const data = await fetchJson<{ sha: string; truncated: boolean; tree: TreeEntry[] }>(
       `${GITHUB_API}/repos/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
       { source: SOURCE, headers: restHeaders() },

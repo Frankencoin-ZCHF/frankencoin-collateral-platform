@@ -5,10 +5,13 @@ import StatsContainer from "@/components/StatsContainer/StatsContainer.astro";
 import CollateralTable from "@/components/CollateralTable.astro";
 import Unavailable from "@/components/Unavailable.astro";
 import Button from "@/components/Button/Button.astro";
+import Pill from "@/components/Pill.astro";
 import ui from "@/content/ui.json";
 import * as collaterals from "@/services/collaterals";
+import { attentionItems } from "@/services/attention";
 import { toRow } from "@/lib/rows";
-import { formatCompact, formatDate, formatNumber } from "@/lib/numbers";
+import { jsonForScript } from "@/lib/html";
+import { formatCompact, formatDateTime, formatNumber } from "@/lib/numbers";
 import { describeForLog } from "@/lib/errors";
 
 export const prerender = false;
@@ -23,14 +26,21 @@ try {
 const records = set?.records ?? [];
 const rows = records.map(toRow);
 const summary = collaterals.summarize(records);
+const attention = attentionItems(records);
 
-const kpis = [
-  { label: "Assessed collaterals", value: String(summary.assessed), sub: `${summary.published} published · ${summary.draft} draft`, href: "#collaterals" },
-  { label: "Live collaterals", value: String(summary.liveCollaterals), sub: "with active positions", href: "#collaterals" },
-  { label: "Minted ZCHF", value: formatCompact(summary.totalMintedZchf), sub: "against these collaterals" },
-  { label: "Collateral value", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "locked in active positions" },
-  { label: "Active positions", value: formatNumber(summary.activePositions, 0), href: "https://app.frankencoin.com/monitoring" },
-  { label: "Active challenges", value: formatNumber(summary.activeChallenges, 0), href: "https://app.frankencoin.com/challenges" },
+const lifecycleKpis = [
+  { label: "Live collaterals", value: String(summary.lifecycle.live), sub: "with open positions", href: "#collaterals" },
+  { label: "Proposed", value: String(summary.lifecycle.proposed), sub: "known to the protocol, nothing open" },
+  { label: "Draft", value: String(summary.lifecycle.draft), sub: "assessment only, not on-chain" },
+  { label: "Closed / denied", value: String(summary.lifecycle.closed + summary.lifecycle.denied), sub: `${summary.lifecycle.closed} closed · ${summary.lifecycle.denied} denied` },
+  { label: "Published assessments", value: String(summary.assessments.published), sub: `${summary.assessments.draft} draft · ${summary.assessments.deprecated} deprecated` },
+  { label: "Live without published assessment", value: String(summary.liveWithoutPublished), sub: summary.liveWithoutPublished ? "review coverage gap" : "full coverage", href: "#attention" },
+];
+const exposureKpis = [
+  { label: "Minted ZCHF against live collateral", value: formatCompact(summary.totalMintedZchf), sub: `${formatNumber(summary.activePositions, 0)} open positions` },
+  { label: "Oracle-valued collateral", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "locked in open positions" },
+  { label: "Debt within 10 % of liquidation", value: formatCompact(summary.debtWithin10Pct), unit: "ZCHF", sub: summary.debtWithin10Pct > 0 ? "requires attention" : "none at the current oracle price", href: "#attention" },
+  { label: "Integrity issues", value: String(summary.integrityIssues), sub: summary.integrityIssues ? "see items requiring attention" : "no open issues", href: "#attention" },
 ];
 
 // Chart payloads
@@ -44,18 +54,10 @@ const valueSeries = {
   values: [...top.map((r) => r.collateralValueChf ?? 0), ...(rest > 0 ? [rest] : [])],
   unit: "CHF",
 };
-const premiumRows = rows.filter((r) => r.riskPremiumAvgPct != null && (r.positionsActive ?? 0) > 0).sort((a, b) => (b.riskPremiumAvgPct ?? 0) - (a.riskPremiumAvgPct ?? 0));
-const premiumSeries = {
-  labels: premiumRows.map((r) => r.ticker),
-  values: premiumRows.map((r) => r.riskPremiumAvgPct ?? 0),
-  series: [
-    { name: "On-chain risk premium", values: premiumRows.map((r) => r.riskPremiumAvgPct ?? 0) },
-    { name: "Assessed target premium", values: premiumRows.map((r) => r.targetRatePct ?? 0) },
-  ],
-  unit: "%",
-};
 
-const updated = set?.protocolFetchedAt ? formatDate(set.protocolFetchedAt) : null;
+const SEV: Record<string, string> = { high: "insufficient", medium: "sufficient", low: "neutral" };
+const protocolAt = set?.protocolFetchedAt ? formatDateTime(set.protocolFetchedAt) : null;
+const assessmentsAt = set?.assessmentsFetchedAt ? formatDateTime(set.assessmentsFetchedAt) : null;
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 ---
 
@@ -67,7 +69,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
           <p class="ty-subtitle">FRANKENCOIN · COLLATERAL PLATFORM</p>
           <h1 class="ty-large-title">Collaterals</h1>
           <p class="ty-body-1 text-[var(--color-neutral-650)] mt-2">
-            Every asset that backs Frankencoin: independent risk assessments, live on-chain positions, version history and community discussion — in one place.
+            Collateral assessments published by their named authors, with live protocol data, version history and community discussion — and the collateral's lifecycle shown separately from the stage of its assessment.
           </p>
         </div>
         <div class="flex gap-3 shrink-0">
@@ -79,7 +81,18 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
       {set?.warnings.map((w) => <Unavailable message={w} compact />)}
       {!set && <Unavailable message="Neither the assessments repository nor the protocol API could be reached. Try again in a minute." />}
 
-      <StatsContainer options={kpis} cols={6} />
+      <div>
+        <p class="fc-card-title mb-2">Collateral lifecycle · assessment stage</p>
+        <StatsContainer options={lifecycleKpis} cols={6} />
+      </div>
+      <div>
+        <p class="fc-card-title mb-2">Exposure and risk</p>
+        <StatsContainer options={exposureKpis} cols={4} />
+      </div>
+      <p class="ty-2xs text-[var(--color-gray-60)]">
+        Live protocol state fetched {protocolAt ?? "–"} (api.frankencoin.com, refreshes every minute)
+        {set?.assessmentsHead && <> · assessment snapshot at commit <a class="underline font-mono" href={`https://github.com/${set.assessmentsHead.url.split("/").slice(3, 5).join("/")}/commit/${set.assessmentsHead.sha}`} target="_blank" rel="noopener noreferrer">{set.assessmentsHead.shortSha}</a> ({formatDateTime(set.assessmentsHead.date)}), read {assessmentsAt}</>}
+      </p>
     </div>
   </Section>
 
@@ -87,17 +100,51 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
     rows.length > 0 && (
       <Section pad="xxs" width="wide" id="dashboard">
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="fc-card p-4">
-            <p class="fc-card-title mb-2">Minted ZCHF per collateral</p>
-            <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-64" />
+          <div class="fc-card p-4 lg:col-span-2" id="attention">
+            <div class="flex items-baseline justify-between gap-2 mb-2">
+              <p class="fc-card-title">Items requiring attention</p>
+              <span class="ty-2xs text-[var(--color-gray-60)]">{attention.length} item{attention.length === 1 ? "" : "s"}</span>
+            </div>
+            {attention.length === 0 ? (
+              <p class="ty-small text-[var(--color-gray-75)]">Nothing requires attention at the current oracle prices.</p>
+            ) : (
+              <div class="overflow-x-auto max-h-80 overflow-y-auto">
+                <table class="fc-table">
+                  <thead>
+                    <tr>
+                      <th>Collateral</th>
+                      <th>State</th>
+                      <th>Deviation / event</th>
+                      <th class="fc-num">Assessed</th>
+                      <th class="fc-num">Live</th>
+                      <th>Severity</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {attention.slice(0, 40).map((it) => (
+                      <tr>
+                        <td><a href={`/collateral/${it.slug}`} class="font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">{it.ticker}</a></td>
+                        <td class="whitespace-nowrap ty-2xs"><Pill value={it.lifecycle} /> <Pill value={it.assessmentStatus === "none" ? "no assessment" : it.assessmentStatus} kind={it.assessmentStatus} /></td>
+                        <td><span class="ty-2xs uppercase tracking-wider text-[var(--color-gray-75)]">{it.kind}</span><span class="block">{it.message}</span></td>
+                        <td class="fc-num">{it.assessed ?? "–"}</td>
+                        <td class="fc-num">{it.live ?? "–"}</td>
+                        <td><Pill value={it.severity} kind={SEV[it.severity]} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-          <div class="fc-card p-4">
-            <p class="fc-card-title mb-2">Collateral value share (CHF)</p>
-            <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-64" />
-          </div>
-          <div class="fc-card p-4">
-            <p class="fc-card-title mb-2">Risk premium: on-chain vs assessed</p>
-            <div data-chart="bar" data-series={JSON.stringify(premiumSeries)} class="h-64" />
+          <div class="flex flex-col gap-4">
+            <div class="fc-card p-4">
+              <p class="fc-card-title mb-2">Minted ZCHF per collateral</p>
+              <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-52" />
+            </div>
+            <div class="fc-card p-4">
+              <p class="fc-card-title mb-2">Oracle-valued collateral share</p>
+              <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-52" />
+            </div>
           </div>
         </div>
       </Section>
@@ -109,9 +156,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <h2 class="ty-title-1">All collaterals</h2>
-          <p class="ty-small text-[var(--color-gray-75)]">
-            <span id="grid-count">{rows.length}</span> shown{updated && <> · protocol data as of {updated}</>}{set?.assessmentsHead && <> · assessments @ <a class="underline" href={`https://github.com/${set.assessmentsHead.url.split("/").slice(3, 5).join("/")}/commit/${set.assessmentsHead.sha}`} target="_blank" rel="noopener noreferrer">{set.assessmentsHead.shortSha}</a></>}
-          </p>
+          <p class="ty-small text-[var(--color-gray-75)]"><span id="grid-count">{rows.length}</span> shown · one row per contract address</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <input id="grid-search" type="search" placeholder="Search…" aria-label="Search collaterals" class="h-9 rounded-full border border-[var(--color-gray-30)] px-4 ty-small w-48 focus:outline-none focus:border-[var(--color-brand-swiss)]" />
@@ -124,34 +169,27 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
         </div>
       </div>
 
-      <div class="flex flex-wrap gap-2 items-center" role="group" aria-label="Filters">
-        <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] mr-1">Assessment</span>
-        {
-          [
-            ["status:all", "All"],
-            ["status:published", "Published"],
-            ["status:draft", "Draft"],
-            ["status:deprecated", "Deprecated"],
-            ["status:none", "On-chain only"],
-          ].map(([chip, label]) => (
+      <div class="flex flex-col gap-2" role="group" aria-label="Filters">
+        <div class="flex flex-wrap gap-2 items-center">
+          <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] w-24">Lifecycle</span>
+          {[["lifecycle:all", "All"], ["lifecycle:live", "Live"], ["lifecycle:proposed", "Proposed"], ["lifecycle:draft", "Draft"], ["lifecycle:closed", "Closed"], ["lifecycle:denied", "Denied"]].map(([chip, label]) => (
+            <button type="button" data-chip={chip} aria-pressed={chip === "lifecycle:all"} class="chip">{label}</button>
+          ))}
+        </div>
+        <div class="flex flex-wrap gap-2 items-center">
+          <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] w-24">Assessment</span>
+          {[["status:all", "All"], ["status:published", "Published"], ["status:draft", "Draft"], ["status:deprecated", "Deprecated"], ["status:none", "None"]].map(([chip, label]) => (
             <button type="button" data-chip={chip} aria-pressed={chip === "status:all"} class="chip">{label}</button>
-          ))
-        }
-        <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] ml-3 mr-1">Free float</span>
-        {
-          [
-            ["class:all", "Any"],
-            ["class:strong", "Strong"],
-            ["class:sufficient", "Sufficient"],
-            ["class:insufficient", "Insufficient"],
-          ].map(([chip, label]) => (
+          ))}
+          <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] ml-3 mr-1">Free float</span>
+          {[["class:all", "Any"], ["class:strong", "Strong"], ["class:sufficient", "Sufficient"], ["class:insufficient", "Insufficient"]].map(([chip, label]) => (
             <button type="button" data-chip={chip} aria-pressed={chip === "class:all"} class="chip">{label}</button>
-          ))
-        }
-        <button type="button" data-chip="live:toggle" aria-pressed="false" class="chip ml-3">Active positions only</button>
+          ))}
+          <button type="button" data-chip="issues:toggle" aria-pressed="false" class="chip ml-3">With issues only</button>
+        </div>
       </div>
 
-      <script is:inline type="application/json" id="grid-data" set:html={JSON.stringify(rows)} />
+      <script is:inline type="application/json" id="grid-data" set:html={jsonForScript(rows)} />
       <div id="collateral-grid" hidden class="w-full"></div>
       <CollateralTable rows={rows} />
       <noscript><p class="ty-xs text-[var(--color-gray-75)]">Enable JavaScript for sorting, filtering and CSV export.</p></noscript>
@@ -160,6 +198,6 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 </Base>
 
 <script>
-  import "@/scripts/charts";
-  import "@/scripts/collateral-grid";
+  import "@/scripts/charts-loader";
+  import "@/scripts/grid-loader";
 </script>

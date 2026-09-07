@@ -1,11 +1,28 @@
 ---
 import type { RiskParametersData } from "./index";
+import { VERDICT_LABEL } from "@/services/comparison";
 interface Props {
   data: RiskParametersData;
 }
 const { data } = Astro.props as Props;
+const PILL: Record<string, string> = {
+  matches: "fc-pill-published",
+  "within-range": "fc-pill-strong",
+  differs: "fc-pill-insufficient",
+  "not-comparable": "fc-pill-neutral",
+  unavailable: "fc-pill-neutral",
+};
 ---
 
+<p class="ty-small text-[var(--color-neutral-650)] mb-3">
+  {
+    data.hasLive
+      ? data.differs === 0
+        ? "Every comparable live parameter matches the assessment or is more conservative."
+        : `${data.differs} parameter${data.differs === 1 ? "" : "s"} deviate${data.differs === 1 ? "s" : ""} from the assessment in the less conservative direction.`
+      : "No active on-chain positions yet — the on-chain column fills in once a position is opened."
+  }
+</p>
 <div class="overflow-x-auto">
   <table class="fc-table">
     <thead>
@@ -13,7 +30,7 @@ const { data } = Astro.props as Props;
         <th>Parameter</th>
         <th class="fc-num">Assessed</th>
         <th class="fc-num">On-chain (active positions)</th>
-        <th></th>
+        <th>Verdict</th>
       </tr>
     </thead>
     <tbody>
@@ -25,13 +42,10 @@ const { data } = Astro.props as Props;
               <span class="block ty-2xs text-[var(--color-gray-60)]">{r.hint}</span>
             </td>
             <td class="fc-num">{r.assessed}</td>
-            <td class="fc-num">
-              {r.onchain}
-              {r.note && <span class="block ty-2xs text-[var(--color-gray-60)] font-normal">{r.note}</span>}
-            </td>
-            <td class="w-8 text-center">
-              {r.verdict === "ok" && <span title="Assessment and on-chain agree" class="text-emerald-600">●</span>}
-              {r.verdict === "diff" && <span title="Assessment and on-chain differ" class="text-amber-500">●</span>}
+            <td class="fc-num">{r.onchain}</td>
+            <td class="min-w-56">
+              <span class={`fc-pill ${PILL[r.verdict]}`}>{VERDICT_LABEL[r.verdict]}</span>
+              <span class="block ty-2xs text-[var(--color-gray-75)] mt-1 normal-case">{r.explanation}</span>
             </td>
           </tr>
         ))
@@ -39,8 +53,3 @@ const { data } = Astro.props as Props;
     </tbody>
   </table>
 </div>
-{
-  !data.hasLive && (
-    <p class="ty-2xs text-[var(--color-gray-60)] mt-3">No active on-chain positions for this collateral yet — the on-chain column fills in once a position is opened.</p>
-  )
-}

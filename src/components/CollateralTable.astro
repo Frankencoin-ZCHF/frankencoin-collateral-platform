@@ -1,5 +1,5 @@
 ---
-/* SSR fallback table for the overview (crawlers, no-JS, and first paint before the grid mounts). */
+/* SSR fallback table for the overview (crawlers, no-JS, and the default until the grid loads). */
 import type { CollateralRow } from "@/lib/rows";
 import { formatCompact, formatPercent, formatPrice } from "@/lib/numbers";
 import Pill from "./Pill.astro";
@@ -15,34 +15,37 @@ const { rows } = Astro.props as Props;
     <thead>
       <tr>
         <th>Ticker</th>
-        <th>Name</th>
+        <th>Lifecycle</th>
         <th>Assessment</th>
+        <th class="fc-num">Issues</th>
         <th>Free float</th>
-        <th>Public info</th>
-        <th class="fc-num">Market risk</th>
-        <th class="fc-num">Retained reserve</th>
-        <th class="fc-num">Price CHF</th>
-        <th class="fc-num">Positions</th>
+        <th class="fc-num">48h downside</th>
+        <th class="fc-num">Assessed reserve</th>
+        <th class="fc-num">Oracle price CHF</th>
+        <th class="fc-num">Open positions</th>
         <th class="fc-num">Minted ZCHF</th>
-        <th class="fc-num">Collateral CHF</th>
-        <th class="fc-num">Risk premium</th>
+        <th class="fc-num">Min. liq. buffer</th>
+        <th class="fc-num">Live premium</th>
       </tr>
     </thead>
     <tbody>
       {
         rows.map((r) => (
           <tr>
-            <td><a href={r.url} class="font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">{r.ticker}</a></td>
-            <td>{r.name}</td>
-            <td><Pill value={r.status === "none" ? "on-chain only" : r.status} kind={r.status} /></td>
+            <td>
+              <a href={r.url} class="font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">{r.ticker}</a>
+              <span class="block ty-2xs text-[var(--color-gray-60)]">{r.name}</span>
+            </td>
+            <td><Pill value={r.lifecycle} /></td>
+            <td><Pill value={r.status === "none" ? "none" : r.status} kind={r.status} /></td>
+            <td class="fc-num">{r.issueCount ? <span class="fc-pill fc-pill-insufficient" title={r.issues.join("\n")}>{r.issueCount}</span> : "–"}</td>
             <td><Pill value={r.freeFloat} /></td>
-            <td><Pill value={r.publicInformation} /></td>
             <td class="fc-num">{formatPercent(r.marketRiskPct)}</td>
             <td class="fc-num">{formatPercent(r.retainedReservePct, 1)}</td>
             <td class="fc-num">{formatPrice(r.priceChf)}</td>
-            <td class="fc-num">{r.positionsActive ?? "–"}</td>
+            <td class="fc-num">{r.positionsOpen ?? "–"}</td>
             <td class="fc-num">{formatCompact(r.mintedZchf)}</td>
-            <td class="fc-num">{formatCompact(r.collateralValueChf)}</td>
+            <td class={`fc-num ${r.minLiquidationBufferPct != null && r.minLiquidationBufferPct < 5 ? "text-red-700" : ""}`}>{formatPercent(r.minLiquidationBufferPct, 1)}</td>
             <td class="fc-num">{formatPercent(r.riskPremiumAvgPct)}</td>
           </tr>
         ))

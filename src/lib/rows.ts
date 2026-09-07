@@ -3,7 +3,7 @@
  * /api/collaterals.json. Keep it JSON-serialisable and flat — AG Grid columns map 1:1.
  */
 
-import type { CollateralRecord } from "@/types";
+import type { CollateralLifecycle, CollateralRecord } from "@/types";
 
 export interface CollateralRow {
   slug: string;
@@ -12,8 +12,10 @@ export interface CollateralRow {
   name: string;
   address: string | null;
   kind: "assessed" | "live-only" | "both";
+  lifecycle: CollateralLifecycle;
   status: "draft" | "published" | "deprecated" | "none";
   assessedOn: string | null;
+  assessmentSha: string | null;
   author: string | null;
   freeFloat: string | null;
   publicInformation: string | null;
@@ -28,13 +30,17 @@ export interface CollateralRow {
   priceUsd: number | null;
   change24hPct: number | null;
   marketCapUsd: number | null;
-  positionsActive: number | null;
+  positionsOpen: number | null;
   positionsTotal: number | null;
   mintedZchf: number | null;
+  totalLimitZchf: number | null;
+  remainingLimitZchf: number | null;
   collateralAmount: number | null;
   collateralValueChf: number | null;
-  availableForMintingZchf: number | null;
   utilizationPct: number | null;
+  weightedCollateralRatioPct: number | null;
+  minLiquidationBufferPct: number | null;
+  debtWithin10Pct: number | null;
   riskPremiumAvgPct: number | null;
   riskPremiumMinPct: number | null;
   riskPremiumMaxPct: number | null;
@@ -46,11 +52,14 @@ export interface CollateralRow {
   activeChallenges: number | null;
   totalChallenges: number | null;
   nextExpiry: string | null;
+  issueCount: number;
+  issues: string[];
 }
 
 export function toRow(r: CollateralRecord): CollateralRow {
   const a = r.assessment?.data ?? null;
   const l = r.live;
+  const notLow = r.issues.filter((i) => i.severity !== "low");
   return {
     slug: r.slug,
     url: `/collateral/${r.slug}`,
@@ -58,8 +67,10 @@ export function toRow(r: CollateralRecord): CollateralRow {
     name: r.name,
     address: r.address,
     kind: r.kind,
+    lifecycle: r.lifecycle,
     status: r.assessment?.status ?? "none",
     assessedOn: a?.assessmentDate ?? null,
+    assessmentSha: r.assessment?.ref?.shortSha ?? null,
     author: a?.author ?? null,
     freeFloat: a?.scores.freeFloat ?? null,
     publicInformation: a?.scores.publicInformation ?? null,
@@ -74,13 +85,17 @@ export function toRow(r: CollateralRecord): CollateralRow {
     priceUsd: l?.price?.usd ?? null,
     change24hPct: l?.market?.change24hPct ?? null,
     marketCapUsd: l?.market?.marketCapUsd ?? null,
-    positionsActive: l ? l.positions.active : null,
-    positionsTotal: l ? l.positions.total : null,
+    positionsOpen: l ? l.counts?.open ?? l.positions.active : null,
+    positionsTotal: l ? l.counts?.total ?? l.positions.total : null,
     mintedZchf: l ? l.totalMintedZchf : null,
+    totalLimitZchf: l?.totalLimitZchf ?? null,
+    remainingLimitZchf: l?.remainingLimitZchf ?? null,
     collateralAmount: l ? l.totalCollateral : null,
     collateralValueChf: l?.collateralValueChf ?? null,
-    availableForMintingZchf: l ? l.availableForMintingZchf : null,
     utilizationPct: l?.utilizationPct ?? null,
+    weightedCollateralRatioPct: l?.safety?.weightedCollateralRatioPct ?? null,
+    minLiquidationBufferPct: l?.safety?.minLiquidationBufferPct ?? null,
+    debtWithin10Pct: l?.safety?.debtWithin.pct10 ?? null,
     riskPremiumAvgPct: l?.riskPremiumPct?.weightedAvg ?? null,
     riskPremiumMinPct: l?.riskPremiumPct?.min ?? null,
     riskPremiumMaxPct: l?.riskPremiumPct?.max ?? null,
@@ -92,5 +107,7 @@ export function toRow(r: CollateralRecord): CollateralRow {
     activeChallenges: l ? l.challenges.active : null,
     totalChallenges: l ? l.challenges.total : null,
     nextExpiry: l?.nextExpiry ?? null,
+    issueCount: notLow.length,
+    issues: notLow.map((i) => i.message),
   };
 }

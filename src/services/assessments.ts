@@ -13,7 +13,7 @@ import {
   GITHUB_WEB,
 } from "@/lib/constants";
 import { describeForLog, NotFoundError } from "@/lib/errors";
-import { parseAssessmentFile } from "@/lib/frontmatter";
+import { FrontmatterError, parseAssessmentFile } from "@/lib/frontmatter";
 import { normalizeAssessment } from "@/lib/normalize";
 import { slugFromTicker } from "@/lib/slug";
 import * as github from "@/upstream/github";
@@ -52,11 +52,19 @@ function toVersionRef(c: github.CommitInfo, path: string): VersionRef {
   };
 }
 
-/** Parse a raw file into an Assessment. Throws FrontmatterError on invalid input. */
-export function buildAssessment(source: string, path: string, status: AssessmentStatus, tickerFromPath: string, refInfo: VersionRef | null): Assessment {
+/**
+ * Parse a raw file into an Assessment. Throws FrontmatterError on invalid input.
+ * A *published* assessment must also be internally consistent: a future assessment date
+ * or a missing contract address is a hard failure there (drafts merely get flagged later).
+ */
+export function buildAssessment(source: string, path: string, status: AssessmentStatus, tickerFromPath: string, refInfo: VersionRef | null, today = new Date().toISOString().slice(0, 10)): Assessment {
   const { frontmatter, body } = parseAssessmentFile(source);
   const data = normalizeAssessment(frontmatter);
   const ticker = data.ticker || tickerFromPath;
+  if (status === "published") {
+    if (!data.address) throw new FrontmatterError("Published assessment has no valid contract_address");
+    if (data.assessmentDate && data.assessmentDate > today) throw new FrontmatterError(`Published assessment is dated in the future (${data.assessmentDate})`);
+  }
   return {
     ticker,
     slug: slugFromTicker(tickerFromPath),
@@ -70,16 +78,16 @@ export function buildAssessment(source: string, path: string, status: Assessment
   };
 }
 
-/** All assessments at the configured ref. Parse failures never fail the index. */
+/**
+ * All assessments at the configured ref. Parse failures never fail the index.
+ *
+ * Coherence: the ref is resolved to ONE commit sha first, and the tree and every file are
+ * then read at that immutable sha — a push in the middle can never mix two states.
+ */
 export function index(): Promise<AssessmentIndex> {
   return getOrLoad(`svc:assessments:index@${repo()}@${ref()}`, 5 * TTL.MINUTE, async () => {
-    const [t, headCommit] = await Promise.all([
-      github.tree(repo(), ref()),
-      github.commitForRef(repo(), ref()).catch((e) => {
-        console.error(`[assessments] head commit lookup failed: ${describeForLog(e)}`);
-        return null;
-      }),
-    ]);
+    const headCommit = await github.commitForRef(repo(), ref());
+    const t = await github.tree(repo(), headCommit.sha);
 
     const candidates = t.entries
       .filter((e) => e.type === "blob")
@@ -92,8 +100,8 @@ export function index(): Promise<AssessmentIndex> {
 
     const results = await Promise.allSettled(
       candidates.map(async ({ entry, meta }) => {
-        const source = await github.rawFile(repo(), headCommit?.sha ?? ref(), entry.path);
-        return buildAssessment(source, entry.path, meta.status, meta.ticker, headCommit ? toVersionRef(headCommit, entry.path) : null);
+        const source = await github.rawFile(repo(), headCommit.sha, entry.path);
+        return buildAssessment(source, entry.path, meta.status, meta.ticker, toVersionRef(headCommit, entry.path));
       }),
     );
 
@@ -113,7 +121,7 @@ export function index(): Promise<AssessmentIndex> {
     return {
       items,
       failures,
-      head: headCommit ? toVersionRef(headCommit, "") : null,
+      head: toVersionRef(headCommit, ""),
       fetchedAt: new Date().toISOString(),
     };
   }, { swrMs: 30 * TTL.MINUTE });

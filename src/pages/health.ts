@@ -7,12 +7,13 @@ import * as github from "@/upstream/github";
 import * as assessments from "@/services/assessments";
 import * as protocol from "@/services/protocol";
 import { blockIssues } from "@/blocks/content/registry";
+import * as collaterals from "@/services/collaterals";
 
 export const prerender = false;
 
 export const GET: APIRoute = async () => {
   const started = Date.now();
-  const [idx, snap] = await Promise.allSettled([assessments.index(), protocol.snapshot()]);
+  const [idx, snap, joined] = await Promise.allSettled([assessments.index(), protocol.snapshot(), collaterals.all()]);
 
   const sources = {
     github: idx.status === "fulfilled" ? "ok" : "error",
@@ -37,6 +38,10 @@ export const GET: APIRoute = async () => {
       snap.status === "fulfilled"
         ? { collaterals: snap.value.byAddress.size, fetchedAt: snap.value.fetchedAt, degraded: snap.value.degraded }
         : { error: describeForLog(snap.reason).split(":")[0] },
+    integrity:
+      joined.status === "fulfilled"
+        ? joined.value.records.filter((r) => r.issues.some((i) => i.severity !== "low")).map((r) => ({ slug: r.slug, lifecycle: r.lifecycle, issues: r.issues.filter((i) => i.severity !== "low") }))
+        : { error: "join failed" },
     contentBlockIssues: blockIssues(),
     rateLimits,
     cache: { enabled: config.cacheEnabled, entries: cacheSize() },

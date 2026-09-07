@@ -91,7 +91,24 @@ export interface ApiChallenge {
   version: number;
 }
 
+/** Authoritative per-collateral aggregates (/ecosystem/collateral/stats). */
+export interface ApiCollateralStats {
+  chainId: number;
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  positions: { total: number; open: number; requested: number; closed: number; denied: number; originals: number; clones: number };
+  totalMinted: number;
+  totalLimit: number;
+  totalBalanceRaw: string;
+  totalValueLocked: { usd: number; chf: number };
+  price: { usd: number; chf: number };
+}
+
 export const collateralList = () => apiFetch<{ num: number; list: ApiCollateral[] }>("/ecosystem/collateral/list");
+export const collateralStats = () =>
+  apiFetch<{ num: number; addresses: string[]; totalValueLocked: { usd: number; chf: number }; map: Record<string, ApiCollateralStats> }>("/ecosystem/collateral/stats");
 export const priceList = () => apiFetch<ApiPrice[]>("/prices/list");
 export const positionList = () => apiFetch<{ num: number; list: ApiPosition[] }>("/positions/list");
 export const challengeList = () => apiFetch<{ num: number; list: ApiChallenge[] }>("/challenges/list");

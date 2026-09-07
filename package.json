@@ -12,24 +12,24 @@
     "astro": "astro",
     "check": "astro check",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "docs:blocks": "node scripts/gen-block-docs.mjs"
+    "test:watch": "vitest"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.22.2"
   },
   "dependencies": {
-    "@astrojs/node": "^9",
+    "@astrojs/node": "^11",
     "@tailwindcss/vite": "^4.3.3",
     "ag-grid-community": "^36.1.0",
     "alpinejs": "^3.17.1",
-    "astro": "^5",
+    "astro": "^7",
     "diff": "^9.0.0",
     "diff2html": "^3.4.56",
     "echarts": "^6.1.0",
     "isomorphic-dompurify": "^4.1.0",
     "marked": "^18.0.11",
     "tailwindcss": "^4.3.3",
+    "undici": "^8.10.2",
     "yaml": "^2.9.0",
     "zod": "^4.5.4"
   },

@@ -1,7 +1,10 @@
 /**
- * The joined view: every collateral that is assessed, live on-chain, or both —
- * one record per address. Single input for the overview, the JSON API and the
- * detail-page header.
+ * The joined view: every collateral that is assessed, live on-chain, or both — one record
+ * per contract address. Single input for the overview, the JSON API and the detail page.
+ *
+ * Contract address is the identity. An assessment whose address matches nothing on-chain
+ * stays an assessment-only record even if a same-symbol token is live — the mismatch is
+ * recorded as an integrity issue and surfaced on the dashboard, never silently merged.
  */
 
 import { getOrLoad, TTL } from "@/lib/cache";
@@ -11,22 +14,70 @@ import { slugFromTicker } from "@/lib/slug";
 import * as coingecko from "@/upstream/coingecko";
 import * as assessments from "./assessments";
 import * as protocol from "./protocol";
-import type { Assessment, CollateralRecord, LiveCollateral } from "@/types";
+import type { Assessment, CollateralLifecycle, CollateralRecord, IntegrityIssue, LiveCollateral, ParseFailure, VersionRef } from "@/types";
 
 export interface CollateralSet {
   records: CollateralRecord[];
-  assessmentsHead: import("@/types").VersionRef | null;
-  assessmentFailures: import("@/types").ParseFailure[];
+  assessmentsHead: VersionRef | null;
+  assessmentsFetchedAt: string | null;
+  assessmentFailures: ParseFailure[];
   protocolFetchedAt: string | null;
+  protocolDegraded: string[];
   /** Human-readable notes about degraded sources. */
   warnings: string[];
 }
 
+/** Lifecycle from protocol counts (aggregate endpoint preferred, position feed as fallback). */
+export function deriveLifecycle(live: LiveCollateral | null): CollateralLifecycle {
+  if (!live) return "draft";
+  const c = live.counts;
+  const open = c ? c.open : live.positions.active;
+  const requested = c ? c.requested : 0;
+  const closed = c ? c.closed : live.positions.closed;
+  const denied = c ? c.denied : live.positions.denied;
+  if (open > 0) return "live";
+  if (requested > 0) return "proposed";
+  if (closed > 0) return "closed";
+  if (denied > 0) return "denied";
+  return "proposed"; // known to the protocol, nothing open yet
+}
+
+function issuesFor(a: Assessment | null, live: LiveCollateral | null, lifecycle: CollateralLifecycle, today: string): IntegrityIssue[] {
+  const issues: IntegrityIssue[] = [];
+  if (a?.data.assessmentDate && a.data.assessmentDate > today) {
+    issues.push({ code: "future-date", severity: "medium", message: `Assessment date ${a.data.assessmentDate} lies in the future.` });
+  }
+  if (live?.reconciliation.divergent) {
+    issues.push({ code: "feed-divergence", severity: "medium", message: live.reconciliation.note ?? "Position feed and protocol aggregate disagree." });
+  }
+  if (lifecycle === "live" && a?.status !== "published") {
+    issues.push({ code: "live-without-published", severity: a ? "low" : "medium", message: a ? `Live collateral with a ${a.status} assessment.` : "Live collateral without any risk assessment." });
+  }
+  if (live?.price?.timestamp) {
+    const ageH = (Date.now() - new Date(live.price.timestamp).getTime()) / 3_600_000;
+    if (ageH > 24) issues.push({ code: "stale-price", severity: "low", message: `Price feed is ${Math.round(ageH)} h old.` });
+  }
+  return issues;
+}
+
 /** Pure join. Exported for tests. */
-export function join(items: Assessment[], live: Map<string, LiveCollateral>): CollateralRecord[] {
+export function join(items: Assessment[], live: Map<string, LiveCollateral>, today = new Date().toISOString().slice(0, 10)): CollateralRecord[] {
   const records: CollateralRecord[] = [];
   const usedAddresses = new Set<string>();
   const usedSlugs = new Set<string>();
+
+  // Live-only records get their slug from the symbol — but an assessment with the same
+  // ticker owns the plain slug, so reserve those first.
+  for (const a of items) usedSlugs.add(a.slug);
+
+  const liveSlug = new Map<string, string>();
+  const slugForLive = (l: LiveCollateral) => {
+    const base = slugFromTicker(l.symbol);
+    const slug = usedSlugs.has(base) ? `${base}-${l.address.slice(2, 8)}` : base;
+    usedSlugs.add(slug);
+    liveSlug.set(l.address, slug);
+    return slug;
+  };
 
   // Pass 1: exact address matches.
   const matched = new Map<Assessment, LiveCollateral | null>();
@@ -35,51 +86,67 @@ export function join(items: Assessment[], live: Map<string, LiveCollateral>): Co
     if (l) usedAddresses.add(l.address);
     matched.set(a, l);
   }
-  // Pass 2: an assessment whose address matched nothing is joined to a *listed* on-chain
-  // collateral with the same symbol (case-insensitive) — the mismatch is flagged on the record.
-  // Restricting to listed collaterals keeps same-symbol impostor tokens out.
-  const liveBySymbol = new Map<string, LiveCollateral>();
-  for (const l of live.values()) if (l.listed && !usedAddresses.has(l.address)) liveBySymbol.set(l.symbol.toLowerCase(), l);
+
+  // Pass 2: live-only records (listed, or with real position history).
+  const liveOnly: LiveCollateral[] = [];
+  for (const [addr, l] of live) {
+    if (usedAddresses.has(addr)) continue;
+    if (!l.listed && l.positions.active === 0) continue; // one-off denied/closed impostors
+    liveOnly.push(l);
+    slugForLive(l);
+  }
 
   for (const a of items) {
-    let l = matched.get(a) ?? null;
+    const l = matched.get(a) ?? null;
+    const lifecycle = deriveLifecycle(l);
+    const issues = issuesFor(a, l, lifecycle, today);
     let addressMismatch: CollateralRecord["addressMismatch"] = null;
     if (!l) {
-      const bySymbol = liveBySymbol.get(a.ticker.toLowerCase());
-      if (bySymbol && !usedAddresses.has(bySymbol.address)) {
-        l = bySymbol;
-        usedAddresses.add(l.address);
-        addressMismatch = { assessed: a.data.address, onchain: l.address };
+      const sameSymbol = liveOnly.find((x) => x.listed && x.symbol.toLowerCase() === a.ticker.toLowerCase());
+      if (sameSymbol) {
+        addressMismatch = { assessed: a.data.address, onchain: sameSymbol.address, liveSlug: liveSlug.get(sameSymbol.address)! };
+        issues.unshift({
+          code: "address-mismatch",
+          severity: "high",
+          message: `Assessment declares contract ${a.data.address ?? "(none)"}, but the protocol's ${sameSymbol.symbol} is ${sameSymbol.address}. Not merged.`,
+        });
       }
     }
-    usedSlugs.add(a.slug);
     records.push({
       slug: a.slug,
       ticker: a.ticker,
-      name: a.data.assetName || l?.name || a.ticker,
-      address: l?.address ?? a.data.address ?? null,
+      name: a.data.assetName || a.ticker,
+      address: a.data.address ?? null,
       kind: l ? "both" : "assessed",
+      lifecycle,
       assessment: a,
       live: l,
       addressMismatch,
+      issues,
     });
   }
 
-  for (const [addr, l] of live) {
-    if (usedAddresses.has(addr)) continue;
-    // Unlisted tokens that only ever had denied/closed positions are noise, not collaterals.
-    if (!l.listed && l.positions.active === 0) continue;
-    let slug = slugFromTicker(l.symbol);
-    if (usedSlugs.has(slug)) slug = `${slug}-${addr.slice(2, 8)}`;
-    usedSlugs.add(slug);
-    records.push({ slug, ticker: l.symbol, name: l.name, address: addr, kind: "live-only", assessment: null, live: l, addressMismatch: null });
+  for (const l of liveOnly) {
+    const lifecycle = deriveLifecycle(l);
+    records.push({
+      slug: liveSlug.get(l.address)!,
+      ticker: l.symbol,
+      name: l.name,
+      address: l.address,
+      kind: "live-only",
+      lifecycle,
+      assessment: null,
+      live: l,
+      addressMismatch: null,
+      issues: issuesFor(null, l, lifecycle, today),
+    });
   }
 
+  const LIFECYCLE_ORDER: Record<CollateralLifecycle, number> = { live: 0, proposed: 1, draft: 2, closed: 3, denied: 4 };
   return records.sort((a, b) => {
-    // Assessed first, then by minted ZCHF desc, then ticker.
-    const ka = a.assessment ? 0 : 1;
-    const kb = b.assessment ? 0 : 1;
-    if (ka !== kb) return ka - kb;
+    const la = LIFECYCLE_ORDER[a.lifecycle];
+    const lb = LIFECYCLE_ORDER[b.lifecycle];
+    if (la !== lb) return la - lb;
     const ma = a.live?.totalMintedZchf ?? 0;
     const mb = b.live?.totalMintedZchf ?? 0;
     if (mb !== ma) return mb - ma;
@@ -120,7 +187,7 @@ export function all(): Promise<CollateralSet> {
       console.error(`[collaterals] protocol snapshot failed: ${describeForLog(snap.reason)}`);
       warnings.push("Live protocol data could not be loaded from api.frankencoin.com.");
     } else if (snap.value.degraded.length) {
-      warnings.push(`Partially degraded protocol data (${snap.value.degraded.join(", ")}).`);
+      warnings.push(`Protocol data partially degraded (${snap.value.degraded.join(", ")}) — affected figures fall back to the position feed.`);
     }
     if (idx.status === "rejected" && snap.status === "rejected") throw idx.reason;
 
@@ -132,8 +199,10 @@ export function all(): Promise<CollateralSet> {
     return {
       records,
       assessmentsHead: idx.status === "fulfilled" ? idx.value.head : null,
+      assessmentsFetchedAt: idx.status === "fulfilled" ? idx.value.fetchedAt : null,
       assessmentFailures: idx.status === "fulfilled" ? idx.value.failures : [],
       protocolFetchedAt: snap.status === "fulfilled" ? snap.value.fetchedAt : null,
+      protocolDegraded: snap.status === "fulfilled" ? snap.value.degraded : ["all"],
       warnings,
     };
   }, { swrMs: 5 * TTL.MINUTE });
@@ -145,29 +214,39 @@ export async function bySlug(slug: string): Promise<CollateralRecord | null> {
 }
 
 export interface Summary {
-  assessed: number;
-  published: number;
-  draft: number;
-  liveCollaterals: number;
+  lifecycle: Record<CollateralLifecycle, number>;
+  assessments: { published: number; draft: number; deprecated: number; none: number };
+  liveWithoutPublished: number;
   activePositions: number;
   totalMintedZchf: number;
   totalCollateralValueChf: number;
+  /** ZCHF minted in positions within 10 % of their liquidation price. */
+  debtWithin10Pct: number;
   activeChallenges: number;
+  integrityIssues: number;
   lastAssessmentDate: string | null;
 }
 
 export function summarize(records: CollateralRecord[]): Summary {
   const live = records.map((r) => r.live).filter((l): l is LiveCollateral => l !== null);
   const dates = records.map((r) => r.assessment?.data.assessmentDate).filter((d): d is string => Boolean(d)).sort();
+  const lifecycle: Record<CollateralLifecycle, number> = { live: 0, proposed: 0, draft: 0, closed: 0, denied: 0 };
+  for (const r of records) lifecycle[r.lifecycle]++;
   return {
-    assessed: records.filter((r) => r.assessment).length,
-    published: records.filter((r) => r.assessment?.status === "published").length,
-    draft: records.filter((r) => r.assessment?.status === "draft").length,
-    liveCollaterals: live.filter((l) => l.positions.active > 0).length,
-    activePositions: sum(live.map((l) => l.positions.active)),
+    lifecycle,
+    assessments: {
+      published: records.filter((r) => r.assessment?.status === "published").length,
+      draft: records.filter((r) => r.assessment?.status === "draft").length,
+      deprecated: records.filter((r) => r.assessment?.status === "deprecated").length,
+      none: records.filter((r) => !r.assessment).length,
+    },
+    liveWithoutPublished: records.filter((r) => r.lifecycle === "live" && r.assessment?.status !== "published").length,
+    activePositions: sum(live.map((l) => l.counts?.open ?? l.positions.active)),
     totalMintedZchf: round(sum(live.map((l) => l.totalMintedZchf)), 0),
     totalCollateralValueChf: round(sum(live.map((l) => l.collateralValueChf)), 0),
+    debtWithin10Pct: round(sum(live.map((l) => l.safety?.debtWithin.pct10 ?? 0)), 0),
     activeChallenges: sum(live.map((l) => l.challenges.active)),
+    integrityIssues: sum(records.map((r) => r.issues.filter((i) => i.severity !== "low").length)),
     lastAssessmentDate: dates.at(-1) ?? null,
   };
 }

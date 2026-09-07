@@ -14,6 +14,7 @@ export const GET: APIRoute = async () => {
       assessmentsHead: set.assessmentsHead ? { sha: set.assessmentsHead.sha, date: set.assessmentsHead.date } : null,
       protocolFetchedAt: set.protocolFetchedAt,
       warnings: set.warnings,
+      integrity: set.records.filter((r) => r.issues.some((i) => i.severity !== "low")).map((r) => ({ slug: r.slug, issues: r.issues.filter((i) => i.severity !== "low") })),
       summary: collaterals.summarize(set.records),
       count: set.records.length,
       collaterals: set.records.map(toRow),

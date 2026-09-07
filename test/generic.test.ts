@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertSafeUrl, isPrivateIp } from "@/upstream/generic";
+import { assertSafeUrl, guardedLookup, isPrivateIp, DEFAULT_ALLOWED_HOSTS } from "@/upstream/generic";
 
 describe("SSRF guard", () => {
   it("classifies private addresses", () => {
@@ -9,17 +9,30 @@ describe("SSRF guard", () => {
     for (const ip of ["8.8.8.8", "1.1.1.1", "2606:4700::1111"]) expect(isPrivateIp(ip), ip).toBe(false);
   });
 
-  it("rejects non-https, credentials, localhost and private IP literals without DNS", async () => {
-    await expect(assertSafeUrl("http://example.com/x", { resolve: false })).rejects.toThrow(/https/);
-    await expect(assertSafeUrl("https://user:pw@example.com/x", { resolve: false })).rejects.toThrow(/Credentials/);
-    await expect(assertSafeUrl("https://localhost/x", { resolve: false })).rejects.toThrow(/Blocked host/);
-    await expect(assertSafeUrl("https://169.254.169.254/latest/meta-data", { resolve: false })).rejects.toThrow(/private/);
-    await expect(assertSafeUrl("https://[::1]/x", { resolve: false })).rejects.toThrow(/private/);
-    await expect(assertSafeUrl("not a url", { resolve: false })).rejects.toThrow(/Invalid URL/);
+  it("rejects non-https, credentials, localhost and private IP literals", () => {
+    expect(() => assertSafeUrl("http://example.com/x")).toThrow(/https/);
+    expect(() => assertSafeUrl("https://user:pw@example.com/x")).toThrow(/Credentials/);
+    expect(() => assertSafeUrl("https://localhost/x")).toThrow(/Blocked host/);
+    expect(() => assertSafeUrl("https://169.254.169.254/latest/meta-data")).toThrow(/private/);
+    expect(() => assertSafeUrl("https://[::1]/x")).toThrow(/private/);
+    expect(() => assertSafeUrl("not a url")).toThrow(/Invalid URL/);
   });
 
-  it("accepts a public https URL (no DNS)", async () => {
-    const u = await assertSafeUrl("https://api.llama.fi/tvl/lido", { resolve: false });
-    expect(u.hostname).toBe("api.llama.fi");
+  it("accepts a public https URL", () => {
+    expect(assertSafeUrl("https://api.llama.fi/tvl/lido").hostname).toBe("api.llama.fi");
+  });
+
+  it("ships a production allowlist of known public data hosts", () => {
+    expect(DEFAULT_ALLOWED_HOSTS).toContain("api.llama.fi");
+    expect(DEFAULT_ALLOWED_HOSTS).toContain("api.coingecko.com");
+    expect(DEFAULT_ALLOWED_HOSTS.every((h) => !/localhost|internal/.test(h))).toBe(true);
+  });
+
+  it("guardedLookup refuses hosts that resolve to private addresses (DNS rebinding / redirect targets)", async () => {
+    const result = await new Promise<{ err: Error | null; addr?: unknown }>((resolve) => {
+      guardedLookup("localhost", { all: false }, (err, addr) => resolve({ err: err as Error | null, addr }));
+    });
+    expect(result.err).not.toBeNull();
+    expect(String(result.err?.message)).toMatch(/private address/);
   });
 });

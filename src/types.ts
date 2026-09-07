@@ -153,6 +153,43 @@ export interface Challenge {
   txHash: string;
 }
 
+/** Per-collateral counts from the protocol's aggregate endpoint (/ecosystem/collateral/stats). */
+export interface PositionCounts {
+  total: number;
+  open: number;
+  requested: number;
+  closed: number;
+  denied: number;
+  originals: number;
+  clones: number;
+}
+
+/** Cross-check between the aggregate endpoint and the position feed. */
+export interface Reconciliation {
+  /** Where the headline figures come from. */
+  aggregateSource: "stats" | "positions";
+  positionsInFeed: number;
+  positionsExpected: number | null;
+  mintedFromPositions: number;
+  mintedFromStats: number | null;
+  /** True when the two sources disagree materially (count mismatch or >1% minted divergence). */
+  divergent: boolean;
+  note: string | null;
+}
+
+/** Position-safety metrics over active positions with a known price. */
+export interface PositionSafety {
+  /** Minted-weighted collateralisation ratio in %. */
+  weightedCollateralRatioPct: number | null;
+  /** Smallest distance from market price down to liquidation price, in % of price. */
+  minLiquidationBufferPct: number | null;
+  /** Median liquidation buffer. */
+  medianLiquidationBufferPct: number | null;
+  /** ZCHF minted in positions whose liquidation price is within 5 / 10 / 20 % of the market price. */
+  debtWithin: { pct5: number; pct10: number; pct20: number };
+  positionsConsidered: number;
+}
+
 export interface LiveCollateral {
   address: string;
   chainId: number;
@@ -163,12 +200,20 @@ export interface LiveCollateral {
   /** Present in /ecosystem/collateral/list (the protocol's official collateral list). */
   listed: boolean;
   price: { chf: number; usd: number; source: string | null; timestamp: string | null } | null;
+  /** Position feed (/positions/list) grouped by collateral — used for the table and safety metrics. */
   positions: { total: number; active: number; closed: number; denied: number; list: Position[] };
+  /** Authoritative counts from the aggregate endpoint (null when that source is degraded). */
+  counts: PositionCounts | null;
   totalMintedZchf: number;
+  /** Aggregate minting limit across all originals (null when unknown). */
+  totalLimitZchf: number | null;
+  /** totalLimit − totalMinted — the protocol-wide remaining capacity for this collateral. */
+  remainingLimitZchf: number | null;
   totalCollateral: number;
   collateralValueChf: number | null;
-  availableForMintingZchf: number;
   utilizationPct: number | null;
+  reconciliation: Reconciliation;
+  safety: PositionSafety | null;
   riskPremiumPct: { min: number; max: number; weightedAvg: number } | null;
   annualInterestPct: { min: number; max: number; weightedAvg: number } | null;
   reserveContributionPct: { min: number; max: number; weightedAvg: number } | null;
@@ -182,16 +227,38 @@ export interface LiveCollateral {
 
 export type CollateralKind = "assessed" | "live-only" | "both";
 
+/**
+ * Collateral lifecycle — independent of the assessment's draft/published/deprecated stage.
+ *   draft     — an assessment exists, the protocol has no trace of the token
+ *   proposed  — known to the protocol (listed or requested positions) but nothing open
+ *   live      — at least one open position
+ *   closed    — positions existed, all closed
+ *   denied    — only denied positions ever existed
+ */
+export type CollateralLifecycle = "draft" | "proposed" | "live" | "closed" | "denied";
+
+export interface IntegrityIssue {
+  code: "address-mismatch" | "feed-divergence" | "future-date" | "live-without-published" | "stale-price";
+  severity: "high" | "medium" | "low";
+  message: string;
+}
+
 export interface CollateralRecord {
   slug: string;
   ticker: string;
   name: string;
   address: string | null;
   kind: CollateralKind;
+  lifecycle: CollateralLifecycle;
   assessment: Assessment | null;
   live: LiveCollateral | null;
-  /** Set when the assessment's contract_address differs from the on-chain token it was matched to by symbol. */
-  addressMismatch: { assessed: string | null; onchain: string } | null;
+  /**
+   * Set when the assessment's contract_address does not match any on-chain collateral but a
+   * listed on-chain collateral with the same symbol exists. The two are NOT merged — this
+   * record stays assessment-only and points at the live record's slug.
+   */
+  addressMismatch: { assessed: string | null; onchain: string; liveSlug: string } | null;
+  issues: IntegrityIssue[];
 }
 
 // ── Discussions ──────────────────────────────────────────────────────────────

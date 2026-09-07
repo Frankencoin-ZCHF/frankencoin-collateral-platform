@@ -26,6 +26,8 @@ function envList(name: string): string[] {
 
 export const config = Object.freeze({
   site: env("SITE", "https://collateral.frankencoin.com"),
+  /** Production build (Vite sets import.meta.env.PROD at build time). Tightens CSP and the block-fetch allowlist. */
+  isProduction: Boolean(import.meta.env?.PROD) || process.env.NODE_ENV === "production",
 
   /** GitHub token — optional. Enables discussions (GraphQL) and the 5000 req/h REST quota. */
   githubToken: env("GITHUB_TOKEN"),

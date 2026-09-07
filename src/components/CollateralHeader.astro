@@ -1,6 +1,5 @@
 ---
 import type { BlockContext } from "@/blocks/types";
-import Pill from "@/components/Pill.astro";
 import CopyButton from "@/components/CopyButton.astro";
 import Button from "@/components/Button/Button.astro";
 import ui from "@/content/ui.json";
@@ -15,6 +14,11 @@ const { ctx } = Astro.props as Props;
 const { record, assessment, isHistorical, version, versions } = ctx;
 const a = assessment;
 const latestSha = versions[0]?.sha ?? null;
+const options = versions.map((v, i) => ({
+  href: i === 0 ? `/collateral/${record.slug}` : `/collateral/${record.slug}?v=${v.sha}`,
+  label: `${formatDate(v.date)} · ${v.shortSha} · ${v.message.slice(0, 40)}${i === 0 ? " (latest)" : ""}`,
+  selected: version ? v.sha === version.sha : i === 0,
+}));
 ---
 
 <div class="flex flex-col gap-5">
@@ -28,16 +32,10 @@ const latestSha = versions[0]?.sha ?? null;
         <h1 class="ty-large-title">{record.name}</h1>
         <span class="ty-title-2 text-[var(--color-brand-titan-gray)]">{record.ticker}</span>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        {a ? <Pill value={a.status} /> : <Pill value={ui.labels.liveOnly} kind="live" />}
-        {record.live && record.live.positions.active > 0 && <Pill value={`${record.live.positions.active} active position${record.live.positions.active === 1 ? "" : "s"}`} kind="brand" />}
-        {record.live && record.live.positions.active === 0 && <Pill value={ui.labels.notLive} kind="neutral" />}
-        {!record.live && <Pill value={ui.labels.notLive} kind="neutral" />}
-      </div>
 
       {
         record.address && (
-          <div class="mt-3 flex flex-wrap items-center gap-2 ty-xs text-[var(--color-gray-75)]">
+          <div class="mt-1 flex flex-wrap items-center gap-2 ty-xs text-[var(--color-gray-75)]">
             <span class="font-mono" title={record.address}>{shortAddress(record.address, 8)}</span>
             <CopyButton value={record.address} />
             <a href={`${ETHERSCAN}/token/${record.address}`} target="_blank" rel="noopener noreferrer" class="underline">Etherscan ↗</a>
@@ -48,9 +46,9 @@ const latestSha = versions[0]?.sha ?? null;
 
       {
         record.addressMismatch && (
-          <p class="mt-2 rounded-md bg-amber-50 border border-amber-200 px-3 py-1.5 text-amber-900" style="font-size: var(--font-size-xs)">
-            ⚠ The assessment lists contract <span class="font-mono">{record.addressMismatch.assessed ?? "(none)"}</span>; on-chain data shown is for the protocol's listed {record.ticker} token <span class="font-mono">{shortAddress(record.addressMismatch.onchain, 6)}</span> (matched by symbol).
-          </p>
+          <div class="mt-3 rounded-md bg-red-50 border border-red-300 px-3 py-2 text-red-900 ty-small" role="alert">
+            <strong>Contract address mismatch.</strong> This assessment declares <span class="font-mono">{record.addressMismatch.assessed ?? "(none)"}</span>, which is not a protocol collateral. The protocol's {record.ticker} token is <span class="font-mono">{shortAddress(record.addressMismatch.onchain, 6)}</span> — its live data is shown on a <a href={`/collateral/${record.addressMismatch.liveSlug}`} class="underline font-bold">separate record</a>. The two are not merged until the assessment is corrected.
+          </div>
         )
       }
 
@@ -72,19 +70,18 @@ const latestSha = versions[0]?.sha ?? null;
       a && (
         <div class="fc-card p-4 shrink-0 lg:w-80 flex flex-col gap-3">
           <div class="flex items-baseline justify-between gap-2">
-            <p class="fc-card-title">{ui.labels.version}</p>
+            <p class="fc-card-title">Assessment {ui.labels.version.toLowerCase()}</p>
             <a href={assessments.fileUrl(a.path, version?.sha)} target="_blank" rel="noopener noreferrer" class="ty-2xs text-[var(--color-blue-39)] underline">{ui.buttons.viewOnGitHub} ↗</a>
           </div>
-          {versions.length > 0 ? (
+          {options.length > 0 ? (
             <select
               aria-label="Select assessment version"
               class="w-full rounded-lg border border-[var(--color-gray-30)] bg-white px-3 py-2 ty-small focus:outline-none focus:border-[var(--color-brand-swiss)]"
-              onchange="if (this.value) window.location.href = this.value"
+              x-data
+              @change="if ($el.value) window.location.href = $el.value"
             >
-              {versions.map((v, i) => (
-                <option value={i === 0 ? `/collateral/${record.slug}` : `/collateral/${record.slug}?v=${v.sha}`} selected={version ? v.sha === version.sha : i === 0}>
-                  {formatDate(v.date)} · {v.shortSha} · {v.message.slice(0, 40)}{i === 0 ? " (latest)" : ""}
-                </option>
+              {options.map((o) => (
+                <option value={o.href} selected={o.selected}>{o.label}</option>
               ))}
             </select>
           ) : (

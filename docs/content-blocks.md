@@ -42,9 +42,11 @@ Rules:
 - Every block needs a `type:`. Unknown types or invalid fields render an inline
   *"Unrenderable block"* notice (and show up in `/health` → `contentBlockIssues`); they never
   break the page.
-- URLs you declare are fetched **server-side** with an SSRF guard: `https://` only, no
-  private/loopback addresses, 5 s timeout, 1 MB cap, cached 5 minutes. Operators can restrict
-  hosts with `BLOCK_FETCH_ALLOWED_HOSTS`.
+- URLs you declare are fetched **server-side** with an SSRF guard: `https://` only, private/
+  loopback addresses blocked at DNS time on every redirect hop, 5 s timeout, 1 MB cap, cached
+  5 minutes. In production only hosts on the allowlist are reachable (built-in list of public
+  data APIs — CoinGecko, DefiLlama, Lido, GitHub, api.frankencoin.com — extendable by the
+  operator via `BLOCK_FETCH_ALLOWED_HOSTS`). Ask for a host to be added if yours is missing.
 - Because the declaration lives in the `.md`, it is versioned and diffed like the rest of
   the assessment.
 

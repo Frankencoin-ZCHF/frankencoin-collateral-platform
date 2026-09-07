@@ -9,9 +9,10 @@ about the assets that back Frankencoin (ZCHF) — the risk assessments maintaine
 `Frankencoin-ZCHF/frankencoin-collateral-assessments`, live on-chain data from `api.frankencoin.com`,
 GitHub-discussion threads, and version history/diffs of each assessment.
 
-Server-rendered Astro 5 (`@astrojs/node` standalone) + Tailwind 4 + Alpine, TypeScript. Design tokens,
-fonts and layout components are **copied from `../frankencoin-site`** — keep them visually in sync
-rather than diverging. Read-only, public, no auth, no database: an in-memory cache in front of
+Server-rendered Astro 7 (`@astrojs/node` 11, standalone) + Tailwind 4 + Alpine, TypeScript. (Astro 7,
+not the site's Astro 5: every Astro 5 release carries unpatched XSS advisories — `yarn audit` is a CI
+gate.) Design tokens, fonts and layout components are **copied from `../frankencoin-site`** — keep
+them visually in sync rather than diverging. Read-only, public, no auth, no database: an in-memory cache in front of
 upstream APIs is the only state.
 
 ## Commands (yarn — not npm)
@@ -21,6 +22,7 @@ yarn install
 yarn dev                 # http://localhost:3000 (PORT env overrides)
 yarn build && yarn start # production: node ./dist/server/entry.mjs
 yarn check               # astro check (types across .astro/.ts)
+yarn audit --level moderate   # must be clean — CI fails otherwise
 yarn test                # vitest, all suites
 yarn test test/protocol.test.ts    # one file
 yarn test -t "matchThreads"        # one test name
@@ -42,18 +44,44 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
   via the Git Trees API (1 call) + `raw.githubusercontent.com` (no API quota); `versions()` queries
   the Commits API for **all three folders** because files move between them and `?path=` does not
   follow renames; `atVersion()` reads the file at a sha (cached 24 h).
-- `src/services/protocol.ts` — `buildSnapshot()` groups `/positions/list` (V1+V2) by collateral
-  address and joins `/prices/list` + `/challenges/list`. Ponder's aggregates are per chain, so this
-  grouping is the only way to get per-collateral numbers.
-- `src/services/collaterals.ts` — `join()` unions assessed and live collaterals by lowercase
-  address into `CollateralRecord[]`; `summarize()` feeds the overview KPIs. Unlisted tokens with no
-  active positions (one-off denied positions like ZEUS/HPS) are dropped here.
+- `src/services/protocol.ts` — headline figures (minted, aggregate limit, remaining capacity,
+  open/requested/closed/denied counts, TVL) come from `/ecosystem/collateral/stats`, the protocol's
+  authoritative aggregate. `/positions/list` (V1+V2) is grouped by collateral only for the position
+  table and `computeSafety()` (liquidation buffers, debt near liquidation), and is **reconciled**
+  against the aggregate — divergence (e.g. CHFAU's open position missing from the feed) is flagged,
+  never hidden. Never sum per-position `availableForClones`/`availableForMinting`: clones repeat
+  their parent's capacity, so the sum overstates several-fold.
+- `src/services/collaterals.ts` — `join()` unions assessed and live collaterals **by contract
+  address only**. An assessment whose address matches nothing is never merged with a same-symbol
+  token: it stays assessment-only with an `address-mismatch` issue pointing at the live record.
+  `deriveLifecycle()` gives every record a collateral lifecycle (draft/proposed/live/closed/denied)
+  from protocol counts — independent of the assessment stage. `issuesFor()` produces integrity
+  issues (future date, feed divergence, live without published assessment). `summarize()` feeds the
+  KPIs. Unlisted tokens with no active positions (ZEUS/HPS…) are dropped.
+- `src/services/comparison.ts` — assessed-vs-on-chain with named verdicts (`matches`,
+  `within-range`, `differs`, `not-comparable`, `unavailable`) and one-sentence explanations;
+  `src/services/attention.ts` turns issues, deviations and near-liquidation debt into the
+  dashboard's "Items requiring attention".
 - `src/services/discussions.ts` — GraphQL only (needs token). Thread resolution: explicit
   `links.discussion` URL in the frontmatter → else `matchThreads()` heuristic on the
   "Acceptable Collaterals" category titles.
 - `src/lib/frontmatter.ts` mirrors the assessments repo's `scripts/validate.js` delimiter logic
   (`---` … `indexOf("---", 3)`) and its JSON schema as zod, kept `.loose()` so new keys such as
-  `links.discussion` / `blocks` pass through.
+  `links.discussion` / `blocks` pass through — with output-oriented rules on display fields
+  (ticker/name/author: no `<>`/control chars; address/date formats). `buildAssessment()` also
+  rejects *published* files with a future date or missing address. `index()` resolves the ref to
+  one commit sha first and reads the tree and every file at that sha (coherent snapshot).
+
+### Security boundaries
+
+- Data → markup: `jsonForScript()` for `<script type="application/json">`, `escapeHtml()`/DOM
+  nodes in AG Grid renderers, DOMPurify for markdown and GitHub HTML. Never `set:html` raw
+  `JSON.stringify` output.
+- CSP (`src/middleware.ts`): production `script-src 'self' 'unsafe-eval'` — **no inline scripts**
+  (use Alpine attributes or module scripts); `'unsafe-eval'` is Alpine's expression evaluator.
+- Author URLs (content blocks): only via `safeFetchJson` in `src/upstream/generic.ts` — an undici
+  agent whose DNS lookup rejects private ranges at connect time, manual redirects re-validated per
+  hop, and a production host allowlist (`DEFAULT_ALLOWED_HOSTS` / `BLOCK_FETCH_ALLOWED_HOSTS`).
 
 ### Block system (`src/blocks/`)
 
@@ -72,12 +100,15 @@ renders an "unavailable" card, never a 500.
 
 ### Client islands
 
-Only two scripts ship to the browser: `src/scripts/collateral-grid.ts` (AG Grid Community, fed by
-the JSON embedded in `#grid-data`, toolbar wiring, SSR fallback table hidden on mount) and
-`src/scripts/charts.ts` (ECharts; any `[data-chart][data-series]` element, reused by the `chart`
-content block). Alpine is bundled from npm (no CDN) so the CSP stays `script-src 'self'`.
+Heavy libraries are lazy chunks: `grid-loader.ts` imports `collateral-grid.ts` (AG Grid, ~1 MB) on
+first toolbar/table interaction or when idle; `charts-loader.ts` imports `charts.ts` (ECharts) when a
+`[data-chart]` scrolls into view. The SSR table is the default until then. Alpine is bundled from
+npm (no CDN).
 
 ## Gotchas
+
+- Runtime: Node ≥ 22.22.2 (`isomorphic-dompurify` engine constraint); `.nvmrc`/`.node-version` pin
+  26 for Railway and CI. Never install with `--ignore-engines`.
 
 - **Number encodings:** token amounts are BigInt strings → `fromWei(v, decimals)`; position
   liquidation prices are scaled by `36 - decimals`; `riskPremiumPPM`/`reserveContribution` are PPM

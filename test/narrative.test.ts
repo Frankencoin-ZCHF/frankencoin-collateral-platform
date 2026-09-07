@@ -20,7 +20,7 @@ function withFences(): string {
 
 function ctxFor(source: string): BlockContext {
   const assessment = buildAssessment(source, "assessments/draft/wstETH.md", "draft", "wstETH", null);
-  const record = { slug: "wsteth", ticker: "wstETH", name: "Wrapped Staked ETH", address: assessment.data.address, kind: "assessed" as const, assessment, live: null, addressMismatch: null };
+  const record = { slug: "wsteth", ticker: "wstETH", name: "Wrapped Staked ETH", address: assessment.data.address, kind: "assessed" as const, lifecycle: "draft" as const, assessment, live: null, addressMismatch: null, issues: [] };
   return { record, assessment, isHistorical: false, version: null, versions: [], origin: "http://localhost" };
 }
 

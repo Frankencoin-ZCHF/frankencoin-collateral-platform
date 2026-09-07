@@ -1,21 +1,42 @@
 /**
  * SSRF-guarded fetch for URLs declared by assessment authors in content blocks.
  *
- *  - https only
- *  - hostname must not be an IP literal in a private/loopback/link-local range, and
- *    must not resolve (A/AAAA) to one
- *  - optional host allowlist (BLOCK_FETCH_ALLOWED_HOSTS)
+ *  - https only, no credentials, no localhost/.internal/.local
+ *  - host allowlist: BLOCK_FETCH_ALLOWED_HOSTS, or a built-in list of known public data
+ *    hosts in production (open in development)
+ *  - private/loopback/link-local/CGNAT addresses are rejected both for IP literals and —
+ *    via a custom undici connector — for every address DNS resolves to *at connection
+ *    time*, on every hop (closes the DNS-rebinding and resolve-then-connect gaps)
+ *  - redirects are NOT followed automatically: each Location is re-validated (max 3 hops)
  *  - short timeout, 1 MB cap, no retry, cached 5 min
  */
 
-import { lookup } from "node:dns/promises";
+import { lookup as dnsLookup } from "node:dns";
 import { isIP } from "node:net";
+import { Agent, fetch as undiciFetch } from "undici";
 import { config } from "@/config";
 import { getOrLoad, TTL } from "@/lib/cache";
-import { BlockedError } from "@/lib/errors";
-import { fetchJson } from "./client";
+import { BlockedError, TimeoutError, UpstreamError } from "@/lib/errors";
+import { readBounded } from "./client";
 
 const SOURCE = "content-block";
+const MAX_REDIRECTS = 3;
+
+/** Public data hosts allowed by default in production. Extend with BLOCK_FETCH_ALLOWED_HOSTS. */
+export const DEFAULT_ALLOWED_HOSTS = [
+  "api.frankencoin.com",
+  "ponder.frankencoin.com",
+  "api.llama.fi",
+  "coins.llama.fi",
+  "stablecoins.llama.fi",
+  "api.coingecko.com",
+  "pro-api.coingecko.com",
+  "eth-api.lido.fi",
+  "api.github.com",
+  "raw.githubusercontent.com",
+  "api.dune.com",
+  "api.etherscan.io",
+];
 
 function isPrivateV4(ip: string): boolean {
   const [a = 0, b = 0] = ip.split(".").map(Number);
@@ -44,8 +65,19 @@ export function isPrivateIp(ip: string): boolean {
   return kind === 4 ? isPrivateV4(ip) : kind === 6 ? isPrivateV6(ip) : true;
 }
 
-/** Validate a URL for outbound fetching. Throws BlockedError. Exported for tests. */
-export async function assertSafeUrl(raw: string, { resolve = true }: { resolve?: boolean } = {}): Promise<URL> {
+export function allowedHosts(): string[] | null {
+  if (config.blockFetchAllowedHosts.length) return config.blockFetchAllowedHosts;
+  return config.isProduction ? DEFAULT_ALLOWED_HOSTS : null; // null = any public host
+}
+
+export function isAllowedHost(host: string): boolean {
+  const allow = allowedHosts();
+  if (!allow) return true;
+  return allow.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/** Validate a URL for outbound fetching (no DNS — DNS is checked by the connector). Throws BlockedError. */
+export function assertSafeUrl(raw: string): URL {
   let url: URL;
   try {
     url = new URL(raw);
@@ -60,35 +92,82 @@ export async function assertSafeUrl(raw: string, { resolve = true }: { resolve?:
     throw new BlockedError(SOURCE, "Blocked host");
   }
   if (isIP(host) && isPrivateIp(host)) throw new BlockedError(SOURCE, "Blocked host (private address)");
-
-  const allow = config.blockFetchAllowedHosts;
-  if (allow.length && !allow.some((h) => host === h || host.endsWith(`.${h}`))) {
-    throw new BlockedError(SOURCE, `Host not in allowlist: ${host}`);
-  }
-
-  if (resolve && !isIP(host)) {
-    let addrs: { address: string }[];
-    try {
-      addrs = await lookup(host, { all: true });
-    } catch {
-      throw new BlockedError(SOURCE, `Host could not be resolved: ${host}`);
-    }
-    if (addrs.length === 0 || addrs.some((a) => isPrivateIp(a.address))) {
-      throw new BlockedError(SOURCE, "Blocked host (resolves to a private address)");
-    }
-  }
+  if (!isAllowedHost(host)) throw new BlockedError(SOURCE, `Host not in allowlist: ${host}`);
   return url;
+}
+
+/**
+ * DNS lookup used by the connector: resolves, then refuses to connect if ANY returned
+ * address is private. Honours the `all` option the way net.connect expects.
+ */
+type LookupCb = (err: NodeJS.ErrnoException | null, address?: string | { address: string; family: number }[], family?: number) => void;
+
+export function guardedLookup(hostname: string, options: { all?: boolean; family?: number; hints?: number }, callback: LookupCb): void {
+  dnsLookup(hostname, { ...options, all: true }, (err, addrs) => {
+    if (err) return callback(err);
+    const list = (Array.isArray(addrs) ? addrs : []) as { address: string; family: number }[];
+    if (list.length === 0) return callback(Object.assign(new Error(`no address for ${hostname}`), { code: "ENOTFOUND" }));
+    if (list.some((a) => isPrivateIp(a.address))) {
+      return callback(Object.assign(new Error(`blocked: ${hostname} resolves to a private address`), { code: "EBLOCKED" }));
+    }
+    if (options.all) return callback(null, list);
+    const first = list[0]!;
+    return callback(null, first.address, first.family);
+  });
+}
+
+const agent = new Agent({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  connect: { lookup: guardedLookup as any, timeout: config.blockFetchTimeoutMs },
+});
+
+/** Fetch with per-hop validation. Returns the final Response (never followed blindly). */
+export async function safeFetch(raw: string): Promise<Response> {
+  let url = assertSafeUrl(raw);
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    let res: Response;
+    try {
+      res = (await undiciFetch(url.href, {
+        method: "GET",
+        headers: { Accept: "application/json", "User-Agent": "frankencoin-collateral-platform" },
+        redirect: "manual",
+        dispatcher: agent,
+        signal: AbortSignal.timeout(config.blockFetchTimeoutMs),
+      })) as unknown as Response;
+    } catch (e) {
+      const err = e as Error & { cause?: { code?: string; message?: string } };
+      const cause = err.cause?.code ?? err.cause?.message ?? "";
+      if (/EBLOCKED|private address/.test(cause) || /private address/.test(err.message)) throw new BlockedError(SOURCE, "Blocked host (resolves to a private address)");
+      if (err.name === "TimeoutError" || err.name === "AbortError") throw new TimeoutError(SOURCE);
+      throw new UpstreamError(SOURCE, undefined, `${SOURCE}: network error (${cause || err.message})`);
+    }
+
+    if ([301, 302, 303, 307, 308].includes(res.status)) {
+      const loc = res.headers.get("location");
+      res.body?.cancel().catch(() => {});
+      if (!loc) throw new UpstreamError(SOURCE, res.status, `${SOURCE}: redirect without location`);
+      if (hop === MAX_REDIRECTS) throw new BlockedError(SOURCE, "Too many redirects");
+      url = assertSafeUrl(new URL(loc, url).href); // re-validated every hop
+      continue;
+    }
+    if (!res.ok) {
+      res.body?.cancel().catch(() => {});
+      throw new UpstreamError(SOURCE, res.status, `${SOURCE}: HTTP ${res.status}`);
+    }
+    return res;
+  }
+  throw new BlockedError(SOURCE, "Too many redirects");
 }
 
 export function safeFetchJson<T = unknown>(raw: string, ttlMs = 5 * TTL.MINUTE): Promise<T> {
   return getOrLoad(`generic:${raw}`, ttlMs, async () => {
-    const url = await assertSafeUrl(raw);
-    return fetchJson<T>(url.href, {
-      source: SOURCE,
-      timeoutMs: config.blockFetchTimeoutMs,
-      maxBytes: config.blockFetchMaxBytes,
-      retry: false,
-    });
+    const res = await safeFetch(raw);
+    const text = await readBounded(res, config.blockFetchMaxBytes, SOURCE);
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new UpstreamError(SOURCE, undefined, `${SOURCE}: response is not JSON`);
+    }
   }, { swrMs: 15 * TTL.MINUTE });
 }
 

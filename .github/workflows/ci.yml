@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      # Fail on any moderate-or-higher advisory (yarn audit exits with a bitmask; 4 = moderate, 8 = high, 16 = critical).
+      - name: yarn audit (moderate+)
+        run: |
+          set +e
+          yarn audit --level moderate
+          code=$?
+          if [ $code -ge 4 ]; then echo "::error::yarn audit found moderate-or-higher advisories (exit $code)"; exit 1; fi
+      - run: yarn check
+      - run: yarn test
+      - run: yarn build
+      - name: Smoke-test the production server
+        run: |
+          PORT=3999 node ./dist/server/entry.mjs & sleep 4
+          curl -sf http://127.0.0.1:3999/health > /dev/null
+          curl -sf -o /dev/null http://127.0.0.1:3999/

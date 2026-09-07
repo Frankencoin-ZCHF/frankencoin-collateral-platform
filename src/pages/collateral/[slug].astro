@@ -2,6 +2,7 @@
 import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
 import CollateralHeader from "@/components/CollateralHeader.astro";
+import DecisionPanel from "@/components/DecisionPanel.astro";
 import Unavailable from "@/components/Unavailable.astro";
 import ui from "@/content/ui.json";
 import { SYSTEM_BLOCKS, runBlocks, type BlockContext } from "@/blocks";
@@ -16,10 +17,13 @@ export const prerender = false;
 const slug = (Astro.params.slug ?? "").toLowerCase();
 if (!isValidSlug(slug)) return Astro.rewrite("/404");
 
-const record = await collaterals.bySlug(slug).catch((e) => {
+let set: Awaited<ReturnType<typeof collaterals.all>> | null = null;
+try {
+  set = await collaterals.all();
+} catch (e) {
   console.error(`[collateral/${slug}] ${describeForLog(e)}`);
-  return null;
-});
+}
+const record = set?.records.find((r) => r.slug === slug) ?? null;
 if (!record) return Astro.rewrite("/404");
 
 // Versions (best effort) and the requested historical version.
@@ -52,8 +56,8 @@ const results = await runBlocks(SYSTEM_BLOCKS, ctx);
 
 const title = `${record.name} (${record.ticker})`;
 const description = assessment
-  ? `${record.ticker} collateral risk assessment (${assessment.status}): free float ${assessment.data.scores.freeFloat ?? "n/a"}, market risk ${assessment.data.scores.marketRiskPct ?? "n/a"}%, retained reserve ${assessment.data.params.retainedReservePct ?? "n/a"}%. Live positions, discussion and version history.`
-  : `${record.ticker} is used as collateral for Frankencoin. Live positions, prices and challenges.`;
+  ? `${record.ticker}: ${record.lifecycle} collateral, ${assessment.status} assessment. Free float ${assessment.data.scores.freeFloat ?? "n/a"}, observed downside ${assessment.data.scores.marketRiskPct ?? "n/a"}%, retained reserve ${assessment.data.params.retainedReservePct ?? "n/a"}%. Live positions, discussion and version history.`
+  : `${record.ticker}: ${record.lifecycle} Frankencoin collateral without a risk assessment. Live positions, prices and challenges.`;
 
 Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600, s-maxage=3600" : "public, max-age=60, s-maxage=60");
 ---
@@ -62,6 +66,9 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
   <Section variant="accent" pad="xs" width="wide">
     <CollateralHeader ctx={ctx} />
     {versionError && <div class="mt-4"><Unavailable compact message={versionError} /></div>}
+    <div class="mt-5">
+      <DecisionPanel ctx={ctx} protocolFetchedAt={set?.protocolFetchedAt ?? null} protocolDegraded={set?.protocolDegraded ?? []} />
+    </div>
   </Section>
 
   <Section pad="xxs" width="wide">
@@ -75,14 +82,10 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
         ))
       }
     </div>
-    {
-      results.length === 0 && (
-        <Unavailable message="Nothing to show for this collateral yet." />
-      )
-    }
+    {results.length === 0 && <Unavailable message="Nothing to show for this collateral yet." />}
   </Section>
 </Base>
 
 <script>
-  import "@/scripts/charts";
+  import "@/scripts/charts-loader";
 </script>

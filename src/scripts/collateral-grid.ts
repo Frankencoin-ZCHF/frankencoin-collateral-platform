@@ -1,7 +1,8 @@
 /**
  * Overview table island: AG Grid Community fed by the JSON embedded in the page
- * (`#grid-data`). Also wires the toolbar (quick search, chip filters, column
- * visibility menu, CSV export) and hides the SSR fallback table once mounted.
+ * (`#grid-data`, written with jsonForScript so it cannot break out of its element).
+ * Renderers build DOM nodes / escaped strings — assessment-controlled text never reaches
+ * innerHTML unescaped. Also wires the toolbar and hides the SSR fallback once mounted.
  */
 
 import {
@@ -17,6 +18,7 @@ import {
   type ValueFormatterParams,
 } from "ag-grid-community";
 import type { CollateralRow } from "@/lib/rows";
+import { escapeHtml } from "@/lib/html";
 import { formatCompact, formatNumber, formatPercent, formatPrice } from "@/lib/numbers";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -50,37 +52,55 @@ const PILL: Record<string, string> = {
   draft: "fc-pill-draft",
   published: "fc-pill-published",
   deprecated: "fc-pill-deprecated",
-  none: "fc-pill-live",
+  none: "fc-pill-insufficient",
   strong: "fc-pill-strong",
   sufficient: "fc-pill-sufficient",
   insufficient: "fc-pill-insufficient",
+  live: "fc-pill-published",
+  proposed: "fc-pill-live",
+  closed: "fc-pill-neutral",
+  denied: "fc-pill-insufficient",
 };
 
-function pill(value: string | null, labelOverride?: string): string {
+/** Escaped pill markup — `value` is assessment/protocol controlled. */
+function pill(value: string | null | undefined, label?: string): string {
   if (!value) return '<span class="text-[var(--color-gray-60)]">–</span>';
   const cls = PILL[value.toLowerCase()] ?? "fc-pill-neutral";
-  return `<span class="fc-pill ${cls}">${labelOverride ?? value}</span>`;
+  return `<span class="fc-pill ${cls}">${escapeHtml(label ?? value)}</span>`;
+}
+
+/** DOM-built link cell (no HTML string interpolation of the ticker). */
+function tickerCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
+  const a = document.createElement("a");
+  a.href = p.data?.url ?? "#";
+  a.className = "font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]";
+  a.textContent = String(p.value ?? "");
+  return a;
+}
+
+function issuesCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
+  const span = document.createElement("span");
+  const n = p.data?.issueCount ?? 0;
+  if (n === 0) {
+    span.textContent = "–";
+    span.className = "text-[var(--color-gray-60)]";
+  } else {
+    span.textContent = String(n);
+    span.className = "fc-pill fc-pill-insufficient";
+    span.title = (p.data?.issues ?? []).join("\n");
+  }
+  return span;
 }
 
 const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
   {
     headerName: "Asset",
     children: [
-      {
-        field: "ticker",
-        headerName: "Ticker",
-        pinned: "left",
-        width: 130,
-        cellRenderer: (p: ICellRendererParams<CollateralRow>) =>
-          `<a href="${p.data?.url}" class="font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">${p.value}</a>`,
-      },
-      { field: "name", headerName: "Name", width: 200 },
-      {
-        field: "status",
-        headerName: "Assessment",
-        width: 130,
-        cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value, p.value === "none" ? "on-chain only" : undefined),
-      },
+      { field: "ticker", headerName: "Ticker", pinned: "left", width: 120, cellRenderer: tickerCell },
+      { field: "name", headerName: "Name", width: 190 },
+      { field: "lifecycle", headerName: "Lifecycle", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value) },
+      { field: "status", headerName: "Assessment", width: 125, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value, p.value === "none" ? "none" : undefined) },
+      { field: "issueCount", headerName: "Issues", width: 90, type: "num", cellRenderer: issuesCell, headerTooltip: "Integrity issues and deviations requiring attention" },
       { field: "assessedOn", headerName: "Assessed on", width: 120, valueFormatter: date, filter: "agDateColumnFilter" },
     ],
   },
@@ -89,40 +109,37 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
     children: [
       { field: "freeFloat", headerName: "Free float", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value) },
       { field: "publicInformation", headerName: "Public info", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value) },
-      { field: "marketRiskPct", headerName: "Market risk", width: 115, type: "num", valueFormatter: pct(2), headerTooltip: "MDD / 99%-VaR over 2× auction duration" },
-      { field: "retainedReservePct", headerName: "Retained reserve", width: 135, type: "num", valueFormatter: pct(1) },
-      { field: "targetRatePct", headerName: "Target premium", width: 130, type: "num", valueFormatter: pct(2), headerTooltip: "Proposed risk premium (target_interest_rate)" },
-      { field: "totalCompensationPct", headerName: "Tail-risk comp.", width: 130, type: "num", valueFormatter: pct(2), headerTooltip: "Sum of tail-risk compensations", hide: true },
+      { field: "marketRiskPct", headerName: "48h downside", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Observed 48-hour downside (max drawdown / 99% VaR over 2× auction duration)" },
+      { field: "retainedReservePct", headerName: "Assessed reserve", width: 135, type: "num", valueFormatter: pct(1) },
+      { field: "targetRatePct", headerName: "Assessed premium", width: 140, type: "num", valueFormatter: pct(2), headerTooltip: "Assessed target risk premium above the lead rate" },
+      { field: "totalCompensationPct", headerName: "Tail-risk comp.", width: 130, type: "num", valueFormatter: pct(2), hide: true },
       { field: "liquidationPriceAssessed", headerName: "Liq. price (assessed)", width: 150, type: "num", valueFormatter: price, hide: true },
       { field: "auctionDurationHours", headerName: "Auction (h)", width: 110, type: "num", valueFormatter: num(0), hide: true },
       { field: "author", headerName: "Author", width: 150, hide: true },
+      { field: "assessmentSha", headerName: "Version", width: 100, hide: true },
     ],
   },
   {
     headerName: "On-chain (Ethereum)",
     children: [
-      { field: "priceChf", headerName: "Price CHF", width: 120, type: "num", valueFormatter: price },
+      { field: "priceChf", headerName: "Oracle price CHF", width: 135, type: "num", valueFormatter: price },
       { field: "priceUsd", headerName: "Price USD", width: 120, type: "num", valueFormatter: price, hide: true },
-      {
-        field: "change24hPct",
-        headerName: "24h",
-        width: 90,
-        type: "num",
-        valueFormatter: pct(1),
-        cellClassRules: { "text-emerald-700": (p) => (p.value ?? 0) > 0, "text-red-700": (p) => (p.value ?? 0) < 0 },
-        hide: true,
-      },
-      { field: "positionsActive", headerName: "Positions", width: 105, type: "num", valueFormatter: num(0), headerTooltip: "Active positions" },
+      { field: "change24hPct", headerName: "24h", width: 90, type: "num", valueFormatter: pct(1), cellClassRules: { "text-emerald-700": (p) => (p.value ?? 0) > 0, "text-red-700": (p) => (p.value ?? 0) < 0 }, hide: true },
+      { field: "positionsOpen", headerName: "Open positions", width: 125, type: "num", valueFormatter: num(0) },
       { field: "mintedZchf", headerName: "Minted ZCHF", width: 125, type: "num", valueFormatter: compact },
-      { field: "collateralValueChf", headerName: "Collateral CHF", width: 130, type: "num", valueFormatter: compact },
+      { field: "collateralValueChf", headerName: "Oracle-valued collateral", width: 170, type: "num", valueFormatter: compact },
+      { field: "minLiquidationBufferPct", headerName: "Min. liq. buffer", width: 130, type: "num", valueFormatter: pct(1), headerTooltip: "Price drop until the riskiest active position becomes challengeable", cellClassRules: { "text-red-700": (p) => p.value != null && p.value < 5, "text-amber-700": (p) => p.value != null && p.value >= 5 && p.value < 15 } },
+      { field: "debtWithin10Pct", headerName: "Debt ≤10% of liq.", width: 140, type: "num", valueFormatter: compact, hide: true },
+      { field: "weightedCollateralRatioPct", headerName: "Collateralisation", width: 135, type: "num", valueFormatter: pct(0), hide: true },
+      { field: "utilizationPct", headerName: "Utilisation", width: 110, type: "num", valueFormatter: pct(1), headerTooltip: "Debt ÷ oracle-valued collateral" },
+      { field: "riskPremiumAvgPct", headerName: "Live premium", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Live position-weighted risk premium" },
+      { field: "annualInterestAvgPct", headerName: "Total borrowing rate", width: 150, type: "num", valueFormatter: pct(2), headerTooltip: "Lead rate + position premium, minted-weighted", hide: true },
+      { field: "reserveContributionAvgPct", headerName: "Live reserve", width: 115, type: "num", valueFormatter: pct(1), hide: true },
+      { field: "remainingLimitZchf", headerName: "Remaining agg. limit", width: 150, type: "num", valueFormatter: compact, headerTooltip: "Protocol aggregate limit minus minted ZCHF" },
+      { field: "totalLimitZchf", headerName: "Aggregate limit", width: 130, type: "num", valueFormatter: compact, hide: true },
       { field: "collateralAmount", headerName: "Collateral (units)", width: 140, type: "num", valueFormatter: (p: Num) => (p.value == null ? "–" : formatNumber(p.value, p.value < 10 ? 4 : 2)), hide: true },
-      { field: "utilizationPct", headerName: "Utilisation", width: 110, type: "num", valueFormatter: pct(1), headerTooltip: "Minted ÷ collateral value" },
-      { field: "riskPremiumAvgPct", headerName: "Risk premium", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Minted-weighted average risk premium of active positions" },
-      { field: "annualInterestAvgPct", headerName: "Total rate", width: 110, type: "num", valueFormatter: pct(2), headerTooltip: "Minted-weighted average annual borrowing rate", hide: true },
-      { field: "reserveContributionAvgPct", headerName: "Reserve", width: 105, type: "num", valueFormatter: pct(1), headerTooltip: "Average reserve contribution", hide: true },
       { field: "liquidationPriceMin", headerName: "Liq. price min", width: 125, type: "num", valueFormatter: price, hide: true },
       { field: "liquidationPriceMax", headerName: "Liq. price max", width: 125, type: "num", valueFormatter: price, hide: true },
-      { field: "availableForMintingZchf", headerName: "Mintable ZCHF", width: 130, type: "num", valueFormatter: compact, hide: true },
       { field: "activeChallenges", headerName: "Challenges", width: 110, type: "num", valueFormatter: num(0), headerTooltip: "Active challenges" },
       { field: "nextExpiry", headerName: "Next expiry", width: 120, valueFormatter: date, hide: true },
     ],
@@ -134,15 +151,17 @@ function leafColumns(defs: typeof columnDefs): ColDef<CollateralRow>[] {
 }
 
 interface Chips {
+  lifecycle: string; // all | live | proposed | draft | closed | denied
   status: string; // all | published | draft | deprecated | none
-  liveOnly: boolean;
   classification: string; // all | strong | sufficient | insufficient
+  issuesOnly: boolean;
 }
 
-function mount() {
+export function mount() {
   const el = document.getElementById("collateral-grid");
   const dataEl = document.getElementById("grid-data");
-  if (!el || !dataEl) return;
+  if (!el || !dataEl || el.dataset.mounted) return;
+  el.dataset.mounted = "1";
 
   let rows: CollateralRow[] = [];
   try {
@@ -151,15 +170,15 @@ function mount() {
     return;
   }
 
-  const chips: Chips = { status: "all", liveOnly: false, classification: "all" };
-  const STORAGE_KEY = "fc-collaterals-grid-columns-v1";
+  const chips: Chips = { lifecycle: "all", status: "all", classification: "all", issuesOnly: false };
+  const STORAGE_KEY = "fc-collaterals-grid-columns-v2";
 
   const options: GridOptions<CollateralRow> = {
     theme,
     rowData: rows,
     columnDefs,
     columnTypes: { num: { cellClass: "fc-num", filter: "agNumberColumnFilter", headerClass: "ag-right-aligned-header" } },
-    defaultColDef: { sortable: true, resizable: true, filter: true, minWidth: 80, suppressHeaderMenuButton: false },
+    defaultColDef: { sortable: true, resizable: true, filter: true, minWidth: 80 },
     domLayout: "autoHeight",
     animateRows: false,
     suppressCellFocus: true,
@@ -168,17 +187,18 @@ function mount() {
     getRowId: (p) => p.data.slug,
     onRowClicked: (e) => {
       const target = e.event?.target as HTMLElement | null;
-      if (target?.closest("a")) return; // let the link handle it
+      if (target?.closest("a")) return;
       if (e.data) window.location.href = e.data.url;
     },
     rowClass: "cursor-pointer",
-    isExternalFilterPresent: () => chips.status !== "all" || chips.liveOnly || chips.classification !== "all",
+    isExternalFilterPresent: () => chips.lifecycle !== "all" || chips.status !== "all" || chips.classification !== "all" || chips.issuesOnly,
     doesExternalFilterPass: (node) => {
       const d = node.data;
       if (!d) return false;
+      if (chips.lifecycle !== "all" && d.lifecycle !== chips.lifecycle) return false;
       if (chips.status !== "all" && d.status !== chips.status) return false;
-      if (chips.liveOnly && !(d.positionsActive && d.positionsActive > 0)) return false;
       if (chips.classification !== "all" && (d.freeFloat ?? "").toLowerCase() !== chips.classification) return false;
+      if (chips.issuesOnly && d.issueCount === 0) return false;
       return true;
     },
     onColumnVisible: (e) => persistColumns(e.api),
@@ -188,20 +208,20 @@ function mount() {
 
   const api = createGrid(el, options);
 
-  // Hide the SSR fallback table now that the grid owns the data.
   document.querySelector<HTMLElement>("[data-grid-fallback]")?.setAttribute("hidden", "");
   el.removeAttribute("hidden");
 
-  // Toolbar ---------------------------------------------------------------
   const search = document.getElementById("grid-search") as HTMLInputElement | null;
   search?.addEventListener("input", () => api.setGridOption("quickFilterText", search.value));
+  if (search?.value) api.setGridOption("quickFilterText", search.value);
 
   document.querySelectorAll<HTMLButtonElement>("[data-chip]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const [group, value] = (btn.dataset.chip ?? "").split(":");
+      if (group === "lifecycle") chips.lifecycle = value ?? "all";
       if (group === "status") chips.status = value ?? "all";
       if (group === "class") chips.classification = value ?? "all";
-      if (group === "live") chips.liveOnly = !chips.liveOnly;
+      if (group === "issues") chips.issuesOnly = !chips.issuesOnly;
       syncChips();
       api.onFilterChanged();
       updateCount();
@@ -209,9 +229,7 @@ function mount() {
   });
 
   document.getElementById("grid-reset")?.addEventListener("click", () => {
-    chips.status = "all";
-    chips.liveOnly = false;
-    chips.classification = "all";
+    Object.assign(chips, { lifecycle: "all", status: "all", classification: "all", issuesOnly: false });
     if (search) search.value = "";
     api.setGridOption("quickFilterText", "");
     api.setFilterModel(null);
@@ -224,9 +242,8 @@ function mount() {
     api.exportDataAsCsv({ fileName: `frankencoin-collaterals-${new Date().toISOString().slice(0, 10)}.csv`, allColumns: true });
   });
 
-  // Column visibility menu
   const menu = document.getElementById("grid-columns-menu");
-  if (menu) {
+  if (menu && !menu.childElementCount) {
     for (const col of leafColumns(columnDefs)) {
       const id = col.field as string;
       const label = document.createElement("label");
@@ -248,22 +265,24 @@ function mount() {
   }
 
   api.addEventListener("filterChanged", updateCount);
+  syncChips();
   updateCount();
 
   function syncChips() {
     document.querySelectorAll<HTMLButtonElement>("[data-chip]").forEach((btn) => {
       const [group, value] = (btn.dataset.chip ?? "").split(":");
       const active =
+        (group === "lifecycle" && chips.lifecycle === value) ||
         (group === "status" && chips.status === value) ||
         (group === "class" && chips.classification === value) ||
-        (group === "live" && chips.liveOnly);
+        (group === "issues" && chips.issuesOnly);
       btn.setAttribute("aria-pressed", String(active));
     });
   }
 
   function updateCount() {
-    const el = document.getElementById("grid-count");
-    if (el) el.textContent = `${api.getDisplayedRowCount()} of ${rows.length}`;
+    const c = document.getElementById("grid-count");
+    if (c) c.textContent = `${api.getDisplayedRowCount()} of ${rows.length}`;
   }
 
   function persistColumns(gridApi: GridApi<CollateralRow>) {
@@ -278,13 +297,9 @@ function mount() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
-      const state = JSON.parse(raw) as { colId: string; hide: boolean }[];
-      gridApi.applyColumnState({ state });
+      gridApi.applyColumnState({ state: JSON.parse(raw) as { colId: string; hide: boolean }[] });
     } catch {
       /* ignore */
     }
   }
 }
-
-if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", mount);
-else mount();

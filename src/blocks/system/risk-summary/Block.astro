@@ -20,22 +20,24 @@ const worst = [...d.tailRisks].filter((t) => t.compensationPct).sort((a, b) => (
     <p class="mt-1"><Pill value={d.scores.publicInformation} /></p>
   </div>
   <div>
-    <p class="fc-kv-label">Market risk</p>
+    <p class="fc-kv-label">Observed 48-hour downside</p>
     <p class="fc-kv-value">{formatPercent(d.scores.marketRiskPct)}</p>
-    <p class="fc-kv-unit">MDD / 99%-VaR over 2× auction</p>
+    <p class="fc-kv-unit">max drawdown or 99 % VaR over twice the auction duration</p>
   </div>
   <div>
     <p class="fc-kv-label">Tail-risk compensation</p>
     <p class="fc-kv-value">{formatPercent(d.totalCompensationPct)}</p>
-    <p class="fc-kv-unit">Σ of all tail-risk premiums p.a.</p>
+    <p class="fc-kv-unit">sum of all tail-risk premiums per year</p>
   </div>
   <div>
-    <p class="fc-kv-label">Retained reserve</p>
+    <p class="fc-kv-label">Assessed retained reserve</p>
     <p class="fc-kv-value">{formatPercent(d.params.retainedReservePct, 1)}</p>
+    <p class="fc-kv-unit">haircut = observed downside + 2 %</p>
   </div>
   <div>
-    <p class="fc-kv-label">Target risk premium</p>
+    <p class="fc-kv-label">Assessed target premium</p>
     <p class="fc-kv-value">{formatPercent(d.params.targetInterestRatePct)}</p>
+    <p class="fc-kv-unit">proposed risk premium above the lead rate</p>
   </div>
 </div>
 

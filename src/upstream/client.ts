@@ -21,7 +21,7 @@ export interface FetchOptions {
 /** Last-seen rate-limit info per source, for /health. */
 export const rateLimits: Record<string, { remaining: number; reset: string | null; seenAt: string }> = {};
 
-async function readBounded(res: Response, maxBytes: number, source: string): Promise<string> {
+export async function readBounded(res: Response, maxBytes: number, source: string): Promise<string> {
   const len = Number(res.headers.get("content-length") ?? 0);
   if (len > maxBytes) throw new UpstreamError(source, res.status, `${source}: response too large (${len} bytes)`);
   if (!res.body) return "";
