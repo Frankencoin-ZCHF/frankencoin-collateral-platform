@@ -20,6 +20,7 @@ upstream APIs is the only state.
 ```bash
 yarn install
 yarn dev                 # http://localhost:3000 (PORT env overrides)
+yarn dev:offline         # no network: assessments from a local clone + protocol fixtures (.env.offline)
 yarn build && yarn start # production: node ./dist/server/entry.mjs
 yarn check               # astro check (types across .astro/.ts)
 yarn audit --level moderate   # must be clean — CI fails otherwise
@@ -28,7 +29,11 @@ yarn test test/protocol.test.ts    # one file
 yarn test -t "matchThreads"        # one test name
 ```
 
-Env vars are all optional (`.env.example`). `GITHUB_TOKEN` matters most: without it, discussions
+Env vars are all optional (`.env.example`). **Offline / test environment:** `yarn dev:offline` runs
+`astro dev --mode offline`, which loads `.env.offline`: `ASSESSMENTS_LOCAL_PATH` points at a local git
+clone of the assessments repo (`src/upstream/localgit.ts` serves tree/files/history via `git`, so
+version diffs work offline) and `PROTOCOL_FIXTURES_DIR=./test/fixtures` serves the API JSON
+fixtures. Discussions and CoinGecko degrade. `/health` reports `mode: "offline"`. `GITHUB_TOKEN` matters most: without it, discussions
 are link-only and GitHub history runs on the 60 req/h unauthenticated quota.
 
 ## Architecture (layered, like frankencoin-mcp)

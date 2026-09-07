@@ -3,9 +3,27 @@
  * /positions/list fetch serves every page in the TTL window.
  */
 
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { config } from "@/config";
 import { getOrLoad, TTL } from "@/lib/cache";
 import { API_BASE } from "@/lib/constants";
 import { fetchJson } from "./client";
+
+/** Offline / test environment: serve JSON fixtures (test/fixtures) instead of the live API. */
+const FIXTURE_FILES: Record<string, string> = {
+  "/ecosystem/collateral/list": "collaterals.json",
+  "/ecosystem/collateral/stats": "stats.json",
+  "/prices/list": "prices.json",
+  "/positions/list": "positions.json",
+  "/challenges/list": "challenges.json",
+};
+
+async function fixture<T>(path: string): Promise<T> {
+  const file = FIXTURE_FILES[path];
+  if (!file) throw new Error(`no fixture for ${path}`);
+  return JSON.parse(await readFile(join(config.protocolFixturesDir, file), "utf8")) as T;
+}
 
 const SOURCE = "frankencoin-api";
 
@@ -15,6 +33,7 @@ const TTLS: Record<string, { ttl: number; swr: number }> = {
 const DEFAULT_TTL = { ttl: TTL.MINUTE, swr: 5 * TTL.MINUTE };
 
 export function apiFetch<T = unknown>(path: string): Promise<T> {
+  if (config.protocolFixturesDir) return fixture<T>(path);
   const { ttl, swr } = TTLS[path] ?? DEFAULT_TTL;
   return getOrLoad(`fc:${path}`, ttl, () => fetchJson<T>(`${API_BASE}${path}`, { source: SOURCE }), { swrMs: swr });
 }

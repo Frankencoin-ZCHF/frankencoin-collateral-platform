@@ -12,7 +12,9 @@
     "astro": "astro",
     "check": "astro check",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "dev:offline": "astro dev --mode offline",
+    "build:offline": "astro build --mode offline"
   },
   "engines": {
     "node": ">=22.22.2"

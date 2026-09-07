@@ -6,8 +6,10 @@
  * (Railway, Docker) are picked up by the standalone Node server.
  */
 
+/** Vite/Astro expose .env files (incl. `.env.<mode>` for `astro dev --mode <mode>`) on import.meta.env; the host injects process.env. */
 function env(name: string, fallback = ""): string {
-  const v = process.env[name];
+  const meta = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  const v = process.env[name] ?? meta?.[name];
   return v === undefined || v === "" ? fallback : v;
 }
 
@@ -34,6 +36,14 @@ export const config = Object.freeze({
   assessmentsRepo: env("ASSESSMENTS_REPO", "Frankencoin-ZCHF/frankencoin-collateral-assessments"),
   assessmentsRef: env("ASSESSMENTS_REF", "main"),
   discussionsRepo: env("DISCUSSIONS_REPO", "Frankencoin-ZCHF/Frankencoin"),
+
+  /**
+   * Offline / test environment. When set, the assessments are read from a local git clone
+   * (tree, files and history via `git`), and protocol data from JSON fixtures instead of
+   * api.frankencoin.com. See `.env.offline` and `yarn dev:offline`.
+   */
+  assessmentsLocalPath: env("ASSESSMENTS_LOCAL_PATH"),
+  protocolFixturesDir: env("PROTOCOL_FIXTURES_DIR"),
 
   /** CoinGecko Pro key — optional. */
   coingeckoApiKey: env("COINGECKO_API_KEY"),

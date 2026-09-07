@@ -35,6 +35,7 @@ cp .env.example .env      # optional — set GITHUB_TOKEN for discussions + hist
 yarn dev                  # http://localhost:3000
 yarn build && yarn start  # production (node ./dist/server/entry.mjs)
 yarn test                 # unit tests (vitest)
+yarn dev:offline          # no network: local clone of the assessments repo + JSON fixtures (see .env.offline)
 yarn check                # astro check
 ```
 

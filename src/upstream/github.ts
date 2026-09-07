@@ -16,6 +16,10 @@ import { getOrLoad, TTL } from "@/lib/cache";
 import { GITHUB_API, GITHUB_RAW } from "@/lib/constants";
 import { MissingSecretError, UpstreamError } from "@/lib/errors";
 import { fetchJson, fetchText } from "./client";
+import * as local from "./localgit";
+
+/** Offline / test environment: read the assessments repo from a local clone instead of GitHub. */
+const offline = () => Boolean(config.assessmentsLocalPath);
 
 const SOURCE = "github";
 
@@ -65,6 +69,7 @@ function mapCommit(c: RawCommit): CommitInfo {
 
 /** Full recursive tree of the repo at `ref` (a commit sha → immutable, cached for a day). */
 export function tree(repo: string, ref: string): Promise<{ sha: string; truncated: boolean; entries: TreeEntry[] }> {
+  if (offline()) return local.tree(ref);
   const immutable = /^[0-9a-f]{40}$/.test(ref);
   return getOrLoad(`gh:tree:${repo}@${ref}`, immutable ? TTL.DAY : 5 * TTL.MINUTE, async () => {
     const data = await fetchJson<{ sha: string; truncated: boolean; tree: TreeEntry[] }>(
@@ -77,6 +82,7 @@ export function tree(repo: string, ref: string): Promise<{ sha: string; truncate
 
 /** The commit a ref (branch/tag/sha) currently points to. */
 export function commitForRef(repo: string, ref: string): Promise<CommitInfo> {
+  if (offline()) return local.commitForRef(ref);
   return getOrLoad(`gh:ref:${repo}@${ref}`, 5 * TTL.MINUTE, async () => {
     const c = await fetchJson<RawCommit>(`${GITHUB_API}/repos/${repo}/commits/${encodeURIComponent(ref)}`, {
       source: SOURCE,
@@ -111,6 +117,7 @@ function rawSlot<T>(fn: () => Promise<T>): Promise<T> {
 
 /** Raw file content. Immutable when `ref` is a full sha → cached for a day. */
 export function rawFile(repo: string, ref: string, path: string): Promise<string> {
+  if (offline()) return local.rawFile(ref, path);
   const immutable = /^[0-9a-f]{40}$/.test(ref);
   const ttl = immutable ? TTL.DAY : 5 * TTL.MINUTE;
   return getOrLoad(`gh:raw:${repo}@${ref}/${path}`, ttl, () =>
@@ -127,6 +134,7 @@ export function rawFile(repo: string, ref: string, path: string): Promise<string
 
 /** Commits touching `path` on `ref`, newest first (max 100). */
 export function commitsForPath(repo: string, ref: string, path: string): Promise<CommitInfo[]> {
+  if (offline()) return local.commitsForPath(ref, path);
   return getOrLoad(`gh:commits:${repo}@${ref}:${path}`, 5 * TTL.MINUTE, async () => {
     const list = await fetchJson<RawCommit[]>(
       `${GITHUB_API}/repos/${repo}/commits?sha=${encodeURIComponent(ref)}&path=${encodeURIComponent(path)}&per_page=100`,
@@ -138,6 +146,7 @@ export function commitsForPath(repo: string, ref: string, path: string): Promise
 
 /** GraphQL — requires a token. Throws MissingSecretError without touching the network. */
 export async function graphql<T = unknown>(query: string, variables: Record<string, unknown> = {}): Promise<T> {
+  if (offline()) throw new MissingSecretError(SOURCE, "network (offline test environment)");
   if (!config.githubToken) throw new MissingSecretError(SOURCE, "GITHUB_TOKEN");
   const data = await fetchJson<{ data?: T; errors?: { message: string }[] }>(`${GITHUB_API}/graphql`, {
     source: `${SOURCE}-graphql`,
@@ -152,5 +161,5 @@ export async function graphql<T = unknown>(query: string, variables: Record<stri
 }
 
 export function hasToken(): boolean {
-  return Boolean(config.githubToken);
+  return Boolean(config.githubToken) && !offline();
 }

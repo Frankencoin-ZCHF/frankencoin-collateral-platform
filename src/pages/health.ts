@@ -16,9 +16,10 @@ export const GET: APIRoute = async () => {
   const [idx, snap, joined] = await Promise.allSettled([assessments.index(), protocol.snapshot(), collaterals.all()]);
 
   const sources = {
-    github: idx.status === "fulfilled" ? "ok" : "error",
-    frankencoinApi: snap.status === "fulfilled" ? (snap.value.degraded.length ? "degraded" : "ok") : "error",
-    discussions: github.hasToken() ? "configured" : "no-token",
+    github: idx.status === "fulfilled" ? (config.assessmentsLocalPath ? "local-clone" : "ok") : "error",
+    frankencoinApi: snap.status === "fulfilled" ? (config.protocolFixturesDir ? "fixtures" : snap.value.degraded.length ? "degraded" : "ok") : "error",
+    discussions: config.assessmentsLocalPath ? "offline" : github.hasToken() ? "configured" : "no-token",
+    mode: config.assessmentsLocalPath || config.protocolFixturesDir ? "offline" : "live",
     coingecko: config.coingeckoApiKey ? "pro" : "public",
   };
   const ok = sources.github === "ok" && sources.frankencoinApi !== "error";
