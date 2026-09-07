@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { compareParameters } from "@/services/comparison";
-import { attentionItems } from "@/services/attention";
+import { attentionGroups, attentionItems } from "@/services/attention";
 import { buildSnapshot, type Inputs } from "@/services/protocol";
 import { join } from "@/services/collaterals";
 import { buildAssessment } from "@/services/assessments";
@@ -45,9 +45,12 @@ describe("attentionItems", () => {
     const wsteth = buildAssessment(text("wstETH.md").replace('"assessment_date": "2026-08-01"', '"assessment_date": "2027-08-01"'), "assessments/draft/wstETH.md", "draft", "wstETH", null, TODAY);
     const items = attentionItems(join([wsteth], snap, TODAY));
     expect(items.length).toBeGreaterThan(0);
-    expect(items.some((i) => i.kind === "future date" && i.ticker === "wstETH")).toBe(true);
-    expect(items.some((i) => i.kind === "feed divergence" && i.ticker === "CHFAU")).toBe(true);
-    const ranks = items.map((i) => ({ high: 0, medium: 1, low: 2 })[i.severity]);
+    expect(items.some((i) => i.title === "Assessment dated in the future" && i.ticker === "wstETH")).toBe(true);
+    expect(items.some((i) => /Position feed disagrees/.test(i.title) && i.ticker === "CHFAU")).toBe(true);
+    // Groups are ordered by severity; within a group items are ordered by severity.
+    const groups = attentionGroups(join([wsteth], snap, TODAY));
+    const ranks = groups.map((g) => ({ high: 0, medium: 1, low: 2 })[g.severity]);
     expect([...ranks].sort((a, b) => a - b)).toEqual(ranks);
+    expect(groups.every((g) => g.items.length > 0 && g.severity === g.items[0]!.severity)).toBe(true);
   });
 });
