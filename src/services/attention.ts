@@ -37,6 +37,7 @@ const ISSUE_TITLE: Record<string, string> = {
   "future-date": "Assessment dated in the future",
   "live-without-published": "Live without a published assessment",
   "stale-price": "Stale price feed",
+  "assessment-unavailable": "Assessment could not be loaded",
 };
 
 export function attentionGroups(records: CollateralRecord[]): AttentionGroup[] {

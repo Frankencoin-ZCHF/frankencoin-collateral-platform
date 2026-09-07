@@ -4,7 +4,7 @@
  */
 
 import { config } from "@/config";
-import { getOrLoad, TTL } from "@/lib/cache";
+import { getOrLoad, invalidate, TTL } from "@/lib/cache";
 import {
   ASSESSMENTS_DIR,
   ASSESSMENT_IGNORED_FILES,
@@ -85,7 +85,8 @@ export function buildAssessment(source: string, path: string, status: Assessment
  * then read at that immutable sha — a push in the middle can never mix two states.
  */
 export function index(): Promise<AssessmentIndex> {
-  return getOrLoad(`svc:assessments:index@${repo()}@${ref()}`, 5 * TTL.MINUTE, async () => {
+  const key = `svc:assessments:index@${repo()}@${ref()}`;
+  return getOrLoad(key, 5 * TTL.MINUTE, async () => {
     const headCommit = await github.commitForRef(repo(), ref());
     const t = await github.tree(repo(), headCommit.sha);
 
@@ -118,6 +119,11 @@ export function index(): Promise<AssessmentIndex> {
     });
 
     const items = [...bySlug.values()].sort((a, b) => a.ticker.localeCompare(b.ticker, "en", { sensitivity: "base" }));
+    // A partial index (transient GitHub failures) must not linger for the full TTL: drop it
+    // after 30 s so the next request retries the missing files.
+    if (failures.some((f) => !/validation|Frontmatter|not valid JSON|does not start/.test(f.error))) {
+      setTimeout(() => invalidate(key), 30_000).unref?.();
+    }
     return {
       items,
       failures,

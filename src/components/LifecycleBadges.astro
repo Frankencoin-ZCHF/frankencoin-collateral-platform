@@ -19,9 +19,10 @@ const ASSESSMENT: Record<string, { label: string; cls: string }> = {
   draft: { label: "Draft assessment — under review", cls: "border-amber-500 text-amber-900 bg-amber-50" },
   deprecated: { label: "Deprecated assessment", cls: "border-[var(--color-neutral-400)] text-[var(--color-neutral-650)] bg-[var(--color-neutral-100)]" },
   none: { label: "No risk assessment", cls: "border-red-400 text-red-800 bg-red-50" },
+  unavailable: { label: "Assessment temporarily unavailable", cls: "border-[var(--color-neutral-400)] text-[var(--color-neutral-650)] bg-[var(--color-neutral-100)]" },
 };
 const lc = LIFECYCLE[record.lifecycle] ?? LIFECYCLE.draft!;
-const as = ASSESSMENT[record.assessment?.status ?? "none"]!;
+const as = ASSESSMENT[record.assessment?.status ?? (record.assessmentUnavailable ? "unavailable" : "none")]!;
 const pad = size === "lg" ? "px-3 py-1.5 text-[13px]" : "px-2.5 py-1 text-[11px]";
 const open = record.live ? (record.live.counts?.open ?? record.live.positions.active) : 0;
 ---

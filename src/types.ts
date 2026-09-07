@@ -238,7 +238,7 @@ export type CollateralKind = "assessed" | "live-only" | "both";
 export type CollateralLifecycle = "draft" | "proposed" | "live" | "closed" | "denied";
 
 export interface IntegrityIssue {
-  code: "address-mismatch" | "feed-divergence" | "future-date" | "live-without-published" | "stale-price";
+  code: "address-mismatch" | "feed-divergence" | "future-date" | "live-without-published" | "stale-price" | "assessment-unavailable";
   severity: "high" | "medium" | "low";
   message: string;
 }
@@ -259,6 +259,8 @@ export interface CollateralRecord {
    */
   addressMismatch: { assessed: string | null; onchain: string; liveSlug: string } | null;
   issues: IntegrityIssue[];
+  /** An assessment file exists for this ticker but could not be loaded/parsed in this snapshot (reason attached). */
+  assessmentUnavailable: string | null;
 }
 
 // ── Discussions ──────────────────────────────────────────────────────────────

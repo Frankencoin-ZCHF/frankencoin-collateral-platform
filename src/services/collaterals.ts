@@ -60,11 +60,16 @@ function issuesFor(a: Assessment | null, live: LiveCollateral | null, lifecycle:
   return issues;
 }
 
-/** Pure join. Exported for tests. */
-export function join(items: Assessment[], live: Map<string, LiveCollateral>, today = new Date().toISOString().slice(0, 10)): CollateralRecord[] {
+/** Pure join. Exported for tests. `failures` = assessment files that exist but could not be loaded. */
+export function join(items: Assessment[], live: Map<string, LiveCollateral>, today = new Date().toISOString().slice(0, 10), failures: ParseFailure[] = []): CollateralRecord[] {
   const records: CollateralRecord[] = [];
   const usedAddresses = new Set<string>();
   const usedSlugs = new Set<string>();
+  const failedBySlug = new Map<string, string>();
+  for (const f of failures) {
+    const file = f.path.split("/").pop()?.replace(/\.md$/, "");
+    if (file) failedBySlug.set(slugFromTicker(file), f.error);
+  }
 
   // Live-only records get their slug from the symbol — but an assessment with the same
   // ticker owns the plain slug, so reserve those first.
@@ -123,13 +128,20 @@ export function join(items: Assessment[], live: Map<string, LiveCollateral>, tod
       live: l,
       addressMismatch,
       issues,
+      assessmentUnavailable: null,
     });
   }
 
   for (const l of liveOnly) {
     const lifecycle = deriveLifecycle(l);
+    const slug = liveSlug.get(l.address)!;
+    const unavailable = failedBySlug.get(slug) ?? failedBySlug.get(slugFromTicker(l.symbol)) ?? null;
+    const issues = issuesFor(null, l, lifecycle, today).filter((i) => !(unavailable && i.code === "live-without-published"));
+    if (unavailable) {
+      issues.unshift({ code: "assessment-unavailable", severity: "medium", message: `The assessment file could not be loaded in this snapshot (${unavailable}). It will be retried shortly.` });
+    }
     records.push({
-      slug: liveSlug.get(l.address)!,
+      slug,
       ticker: l.symbol,
       name: l.name,
       address: l.address,
@@ -138,7 +150,8 @@ export function join(items: Assessment[], live: Map<string, LiveCollateral>, tod
       assessment: null,
       live: l,
       addressMismatch: null,
-      issues: issuesFor(null, l, lifecycle, today),
+      issues,
+      assessmentUnavailable: unavailable,
     });
   }
 
@@ -192,8 +205,10 @@ export function all(): Promise<CollateralSet> {
     if (idx.status === "rejected" && snap.status === "rejected") throw idx.reason;
 
     const items = idx.status === "fulfilled" ? idx.value.items : [];
+    const failures = idx.status === "fulfilled" ? idx.value.failures : [];
+    if (failures.length) warnings.push(`${failures.length} assessment file${failures.length === 1 ? "" : "s"} could not be loaded from GitHub in this snapshot; the affected collaterals are marked "assessment unavailable" and will be retried shortly.`);
     const live = snap.status === "fulfilled" ? snap.value.byAddress : new Map<string, LiveCollateral>();
-    const records = join(items, live);
+    const records = join(items, live, undefined, failures);
     await enrichMarket(records);
 
     return {

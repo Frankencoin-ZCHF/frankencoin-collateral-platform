@@ -156,7 +156,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
           {[["class:all", "Any"], ["class:strong", "Strong"], ["class:sufficient", "Sufficient"], ["class:insufficient", "Insufficient"]].map(([chip, label]) => (
             <button type="button" data-chip={chip} aria-pressed={chip === "class:all"} class="chip">{label}</button>
           ))}
-          <button type="button" data-chip="issues:toggle" aria-pressed="false" class="chip ml-3">With issues only</button>
+          <button type="button" data-chip="issues:toggle" aria-pressed="false" class="chip ml-3">Needs attention only</button>
         </div>
       </div>
 

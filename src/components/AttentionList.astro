@@ -27,8 +27,8 @@ const SEV_BAR: Record<string, string> = { high: "bg-red-500", medium: "bg-amber-
       <ul class="flex flex-col divide-y divide-[var(--color-gray-20)]">
         {groups.map((g) => (
           <li>
-            <details class="group" open={expanded}>
-              <summary class="list-none cursor-pointer flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-[var(--color-gray-10)]">
+            <details class="group scroll-mt-24" id={g.slug} open={expanded} x-data x-init="if (window.location.hash === '#' + $el.id) { $el.open = true; $el.scrollIntoView({ block: 'start' }) }">
+              <summary class="list-none cursor-pointer flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-[var(--color-gray-10)] target:bg-[var(--color-gray-10)]">
                 <span class={`h-5 w-1 shrink-0 rounded-full ${SEV_BAR[g.severity]}`} aria-label={`${g.severity} severity`} />
                 <a href={`/collateral/${g.slug}`} class="ty-small font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)] w-16 shrink-0" @click.stop>{g.ticker}</a>
                 <span class="hidden md:flex items-center gap-1 shrink-0">

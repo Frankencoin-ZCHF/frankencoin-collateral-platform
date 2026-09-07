@@ -4,6 +4,7 @@
  */
 
 import type { CollateralLifecycle, CollateralRecord } from "@/types";
+import { attentionGroups } from "@/services/attention";
 
 export interface CollateralRow {
   slug: string;
@@ -52,14 +53,17 @@ export interface CollateralRow {
   activeChallenges: number | null;
   totalChallenges: number | null;
   nextExpiry: string | null;
-  issueCount: number;
-  issues: string[];
+  /** Number of items on the attention page for this collateral — the same list, so the numbers agree everywhere. */
+  attentionCount: number;
+  attentionHigh: number;
+  attention: string[];
+  attentionUrl: string;
 }
 
 export function toRow(r: CollateralRecord): CollateralRow {
   const a = r.assessment?.data ?? null;
   const l = r.live;
-  const notLow = r.issues.filter((i) => i.severity !== "low");
+  const items = attentionGroups([r])[0]?.items ?? [];
   return {
     slug: r.slug,
     url: `/collateral/${r.slug}`,
@@ -107,7 +111,9 @@ export function toRow(r: CollateralRecord): CollateralRow {
     activeChallenges: l ? l.challenges.active : null,
     totalChallenges: l ? l.challenges.total : null,
     nextExpiry: l?.nextExpiry ?? null,
-    issueCount: notLow.length,
-    issues: notLow.map((i) => i.message),
+    attentionCount: items.length,
+    attentionHigh: items.filter((i) => i.severity === "high").length,
+    attention: items.map((i) => i.title),
+    attentionUrl: `/attention#${r.slug}`,
   };
 }

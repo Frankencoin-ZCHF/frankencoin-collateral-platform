@@ -150,6 +150,15 @@ describe("join — identity is the contract address", () => {
     expect(records.find((r) => r.ticker === "VCHF")!.lifecycle).toBe("proposed");
   });
 
+  it("marks a live collateral whose assessment file failed to load as 'unavailable', not 'no assessment'", () => {
+    const records = join([], snap, TODAY, [{ path: "assessments/draft/WBTC.md", error: "github timed out" }]);
+    const wbtc = records.find((r) => r.ticker === "WBTC")!;
+    expect(wbtc.assessmentUnavailable).toBe("github timed out");
+    expect(wbtc.issues.map((i) => i.code)).toContain("assessment-unavailable");
+    expect(wbtc.issues.map((i) => i.code)).not.toContain("live-without-published");
+    expect(records.find((r) => r.ticker === "WETH")!.assessmentUnavailable).toBeNull();
+  });
+
   it("summarises lifecycle × assessment dimensions", () => {
     const s = summarize(join([wsteth, wbtc], snap, TODAY));
     expect(s.lifecycle.live).toBeGreaterThan(10);

@@ -118,6 +118,8 @@ npm (no CDN).
 - **Frontmatter units differ:** `market_risk`/`compensation` are `"16.98%"` strings,
   `retained_reserve`/`target_interest_rate` are fractions (`0.25`, `0.0075`) — `lib/normalize.ts`
   turns everything into percents; `Assessment.raw` keeps the verbatim object for diffs.
+- raw.githubusercontent.com answers in 4–8 s per file; `upstream/github.ts` limits raw fetches to 4 in flight with a 20 s timeout. A partial index (transient fetch failures) is dropped from the cache after 30 s and the affected collaterals show "assessment temporarily unavailable" instead of "no assessment".
+- "Items requiring attention" is ONE list (`services/attention.ts`): the table column, the decision panel, the dashboard tile and `/attention` all derive from it, so counts always agree. `record.issues` (integrity issues) is a subset of it.
 - Real assessment files don't always follow the template headings (e.g. no `## Tail Risks`
   wrapper) — never key logic on heading text.
 - `/prices/list` may list a token twice (cbBTC); the map is keyed by address so last write wins.

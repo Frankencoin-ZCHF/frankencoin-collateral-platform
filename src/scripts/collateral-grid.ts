@@ -78,18 +78,21 @@ function tickerCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
   return a;
 }
 
-function issuesCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
-  const span = document.createElement("span");
-  const n = p.data?.issueCount ?? 0;
+/** Attention count, linking straight to this collateral's group on the attention page. */
+function attentionCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
+  const n = p.data?.attentionCount ?? 0;
   if (n === 0) {
+    const span = document.createElement("span");
     span.textContent = "–";
     span.className = "text-[var(--color-gray-60)]";
-  } else {
-    span.textContent = String(n);
-    span.className = "fc-pill fc-pill-insufficient";
-    span.title = (p.data?.issues ?? []).join("\n");
+    return span;
   }
-  return span;
+  const a = document.createElement("a");
+  a.href = p.data?.attentionUrl ?? "/attention";
+  a.textContent = String(n);
+  a.className = `fc-pill ${p.data?.attentionHigh ? "fc-pill-insufficient hover:bg-red-200" : "fc-pill-sufficient hover:bg-amber-200"}`;
+  a.title = (p.data?.attention ?? []).join("\n");
+  return a;
 }
 
 const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
@@ -100,7 +103,7 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
       { field: "name", headerName: "Name", width: 190 },
       { field: "lifecycle", headerName: "Lifecycle", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value) },
       { field: "status", headerName: "Assessment", width: 125, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value, p.value === "none" ? "none" : undefined) },
-      { field: "issueCount", headerName: "Issues", width: 90, type: "num", cellRenderer: issuesCell, headerTooltip: "Integrity issues and deviations requiring attention" },
+      { field: "attentionCount", headerName: "Attention", width: 105, type: "num", cellRenderer: attentionCell, headerTooltip: "Items requiring attention: integrity issues, live parameters deviating from the assessment, debt near liquidation, running challenges. Click to open them." },
       { field: "assessedOn", headerName: "Assessed on", width: 120, valueFormatter: date, filter: "agDateColumnFilter" },
     ],
   },
@@ -198,7 +201,7 @@ export function mount() {
       if (chips.lifecycle !== "all" && d.lifecycle !== chips.lifecycle) return false;
       if (chips.status !== "all" && d.status !== chips.status) return false;
       if (chips.classification !== "all" && (d.freeFloat ?? "").toLowerCase() !== chips.classification) return false;
-      if (chips.issuesOnly && d.issueCount === 0) return false;
+      if (chips.issuesOnly && d.attentionCount === 0) return false;
       return true;
     },
     onColumnVisible: (e) => persistColumns(e.api),

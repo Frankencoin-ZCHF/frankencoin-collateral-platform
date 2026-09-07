@@ -5,6 +5,7 @@ import type { BlockContext } from "@/blocks/types";
 import LifecycleBadges from "./LifecycleBadges.astro";
 import { formatCompact, formatDate, formatDateTime, formatPercent } from "@/lib/numbers";
 import { compareParameters } from "@/services/comparison";
+import { attentionGroups } from "@/services/attention";
 
 interface Props {
   ctx: BlockContext;
@@ -17,7 +18,9 @@ const l = record.live;
 const s = l?.safety ?? null;
 const rows = assessment ? compareParameters(assessment.data.params, l) : [];
 const differs = rows.filter((r) => r.verdict === "differs");
-const highIssues = record.issues.filter((i) => i.severity !== "low");
+// Same list as the table column and the /attention page, so the numbers agree everywhere.
+const attentionItems = attentionGroups([record])[0]?.items ?? [];
+const attentionHigh = attentionItems.filter((i) => i.severity === "high").length;
 const bufferTone = s?.minLiquidationBufferPct == null ? "" : s.minLiquidationBufferPct < 5 ? "text-red-700" : s.minLiquidationBufferPct < 15 ? "text-amber-700" : "text-emerald-700";
 ---
 
@@ -44,9 +47,11 @@ const bufferTone = s?.minLiquidationBufferPct == null ? "" : s.minLiquidationBuf
       <p class="fc-kv-unit">{s ? `${formatCompact(s.debtWithin.pct10)} ZCHF within 10 % of liquidation` : "no priced positions"}</p>
     </div>
     <div>
-      <p class="fc-kv-label">Deviations from assessment</p>
-      <p class={`fc-kv-value ${differs.length ? "text-amber-700" : highIssues.length ? "text-amber-700" : ""}`}>{assessment ? differs.length + highIssues.length : "–"}</p>
-      <p class="fc-kv-unit">{assessment ? (differs.length || highIssues.length ? [...differs.map((d) => d.label), ...highIssues.map((i) => i.code.replace(/-/g, " "))].join(", ") : "none requiring attention") : "no assessment to compare"}</p>
+      <p class="fc-kv-label">Items requiring attention</p>
+      <p class={`fc-kv-value ${attentionHigh ? "text-red-700" : attentionItems.length ? "text-amber-700" : ""}`}>
+        {attentionItems.length > 0 ? <a href={`/attention#${record.slug}`} class="underline decoration-dotted hover:text-[var(--color-brand-swiss)]">{attentionItems.length}</a> : "0"}
+      </p>
+      <p class="fc-kv-unit">{attentionItems.length ? attentionItems.map((i) => i.title.replace(/ differs from assessment$/, "")).join(", ") : "nothing at the current oracle price"}</p>
     </div>
     <div>
       <p class="fc-kv-label">Governance reference</p>

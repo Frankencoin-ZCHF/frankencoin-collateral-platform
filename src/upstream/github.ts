@@ -86,15 +86,41 @@ export function commitForRef(repo: string, ref: string): Promise<CommitInfo> {
   }, { swrMs: 30 * TTL.MINUTE });
 }
 
+/**
+ * Bounded concurrency for raw fetches: the index reads every assessment at once, and
+ * raw.githubusercontent.com gets slow when hit with 15+ parallel requests.
+ */
+const RAW_MAX_CONCURRENT = 4;
+let rawInFlight = 0;
+const rawQueue: (() => void)[] = [];
+function rawSlot<T>(fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const run = () => {
+      rawInFlight++;
+      fn()
+        .then(resolve, reject)
+        .finally(() => {
+          rawInFlight--;
+          rawQueue.shift()?.();
+        });
+    };
+    if (rawInFlight < RAW_MAX_CONCURRENT) run();
+    else rawQueue.push(run);
+  });
+}
+
 /** Raw file content. Immutable when `ref` is a full sha → cached for a day. */
 export function rawFile(repo: string, ref: string, path: string): Promise<string> {
   const immutable = /^[0-9a-f]{40}$/.test(ref);
   const ttl = immutable ? TTL.DAY : 5 * TTL.MINUTE;
   return getOrLoad(`gh:raw:${repo}@${ref}/${path}`, ttl, () =>
-    fetchText(`${GITHUB_RAW}/${repo}/${ref}/${path.split("/").map(encodeURIComponent).join("/")}`, {
-      source: SOURCE,
-      headers: authHeaders(),
-    }),
+    rawSlot(() =>
+      fetchText(`${GITHUB_RAW}/${repo}/${ref}/${path.split("/").map(encodeURIComponent).join("/")}`, {
+        source: SOURCE,
+        headers: authHeaders(),
+        timeoutMs: 20_000,
+      }),
+    ),
     { swrMs: immutable ? 0 : 30 * TTL.MINUTE },
   );
 }
