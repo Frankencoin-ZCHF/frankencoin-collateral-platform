@@ -1,0 +1,37 @@
+---
+/* Ported from frankencoin-site; `href`/`tooltip`/`sub` added. */
+export interface StatOption {
+  label: string;
+  value: string;
+  unit?: string;
+  sub?: string;
+  href?: string;
+  tooltip?: string;
+}
+
+const { label, value, unit, sub, href, tooltip } = Astro.props as StatOption;
+const Tag = href ? "a" : "div";
+const isExternal = href?.startsWith("http");
+---
+
+<Tag
+  href={href}
+  target={isExternal ? "_blank" : undefined}
+  rel={isExternal ? "noopener noreferrer" : undefined}
+  title={tooltip}
+  class={`w-full flex flex-col items-start py-3 px-5 group border border-[var(--color-gray-20)] rounded-xl bg-white ${href ? "hover:border-[var(--color-brand-deep-blue)] transition-colors" : ""}`}
+>
+  <div class="flex items-center gap-2">
+    <h3 class="ty-xs tracking-wider uppercase text-[var(--color-gray-75)]">{label}</h3>
+    {
+      href && (
+        <img src="/images/arrow_outward.svg" loading="lazy" alt="" class="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity duration-50" />
+      )
+    }
+  </div>
+  <div class="flex md:flex-row flex-col items-start md:items-baseline md:gap-2 gap-0">
+    <p class="ty-big-2 text-[var(--color-brand-deep-blue)]">{value}</p>
+    {unit && <p class="ty-xs text-[var(--color-gray-75)]">{unit}</p>}
+  </div>
+  {sub && <p class="ty-xs text-[var(--color-gray-60)] mt-0.5">{sub}</p>}
+</Tag>

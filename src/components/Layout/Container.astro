@@ -1,0 +1,29 @@
+---
+/* Ported from frankencoin-site. */
+interface Props {
+  width?: "narrow" | "content" | "medium" | "wide" | "full";
+  id?: string;
+}
+
+const { width = "content", id } = Astro.props as Props;
+
+const widths = {
+  narrow: "max-w-3xl",
+  content: "max-w-6xl",
+  medium: "max-w-8xl",
+  wide: "max-w-7xl",
+  full: "max-w-[100%]",
+}[width];
+
+const padding = {
+  narrow: "px-[var(--spacing-l)]",
+  content: "px-[var(--spacing-xxl)]",
+  medium: "px-[var(--spacing-m)]",
+  wide: "px-[var(--spacing-l)]",
+  full: "lg:px-[12%] px-[var(--spacing-l)]",
+}[width];
+---
+
+<div id={id} class={`mx-auto w-full ${widths} ${padding}`}>
+  <slot />
+</div>

@@ -1,0 +1,73 @@
+---
+import Button from "@/components/Button/Button.astro";
+import NavLink from "@/components/Button/NavLink.astro";
+import MobileMenu from "./MobileMenu.astro";
+import ui from "@/content/ui.json";
+
+const { brand, links, cta } = ui.nav;
+const path = Astro.url.pathname;
+
+function isActive(href: string) {
+  if (href.startsWith("http")) return false;
+  if (href === "/") return path === "/" || path.startsWith("/collateral/");
+  return path === href || path.startsWith(href + "/");
+}
+---
+
+<header
+  class="fixed w-full top-0 z-40 bg-[var(--color-white)] border-b border-[var(--color-neutral-200)] px-5 py-2.5"
+>
+  <div class="w-full flex items-center justify-between h-11">
+    <!-- Left: Brand -->
+    <div class="nav-left flex items-center gap-3">
+      <a href={brand.href} class="inline-flex items-center gap-[var(--spacing-s)]">
+        <img
+          src="/images/Frankencoin-Logo-Compressify.io.webp"
+          alt={`${brand.name} logo`}
+          class="h-8 w-auto"
+        />
+        <span class="sr-only">{brand.name}</span>
+      </a>
+      <span class="hidden sm:inline ty-small ty-medium text-[var(--color-brand-titan-gray)] border-l border-[var(--color-neutral-300)] pl-3">
+        {ui.site.shortName}
+      </span>
+    </div>
+
+    <!-- Center: Nav (desktop) -->
+    <nav role="navigation" aria-label="Main" class="hidden md:flex items-center gap-[var(--spacing-l)]">
+      {
+        links.map((l) => (
+          <NavLink
+            href={l.href}
+            active={isActive(l.href)}
+            target={l.external ? "_blank" : undefined}
+            rel={l.external ? "noopener noreferrer" : undefined}
+          >
+            {l.label}
+          </NavLink>
+        ))
+      }
+    </nav>
+
+    <!-- Right: CTA + Mobile Menu -->
+    <div class="flex items-center gap-[var(--spacing-l)]">
+      <div class="hidden lg:block">
+        <Button href={cta.href} variant="primary" rounded="full" size="md" external={true}>
+          {cta.label}
+        </Button>
+      </div>
+
+      <details class="md:hidden relative">
+        <summary
+          class="list-none inline-flex h-9 w-9 items-center justify-center rounded-[var(--radius-button-6)] text-[var(--color-neutral-650)] hover:cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-blue-50)]"
+          aria-label="Open menu"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 7h16M4 12h16M4 17h16"></path>
+          </svg>
+        </summary>
+        <MobileMenu />
+      </details>
+    </div>
+  </div>
+</header>

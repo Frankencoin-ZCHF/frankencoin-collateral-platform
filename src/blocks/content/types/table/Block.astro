@@ -1,0 +1,22 @@
+---
+import type { TableData } from "./index";
+interface Props {
+  data: TableData;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="fc-card p-4 my-4">
+  {data.title && <p class="fc-card-title mb-2">{data.title}</p>}
+  <div class="overflow-x-auto">
+    <table class="fc-table">
+      <thead>
+        <tr>{data.columns.map((c) => <th class={c.align === "right" ? "fc-num" : ""}>{c.label}</th>)}</tr>
+      </thead>
+      <tbody>
+        {data.rows.map((row) => <tr>{row.map((cell, i) => <td class={data.columns[i]?.align === "right" ? "fc-num" : ""}>{cell}</td>)}</tr>)}
+      </tbody>
+    </table>
+  </div>
+  {data.source && <p class="ty-2xs text-[var(--color-gray-60)] mt-2">Source: {data.source}</p>}
+</div>

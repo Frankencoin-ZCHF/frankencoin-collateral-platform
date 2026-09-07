@@ -1,0 +1,18 @@
+---
+import type { CalloutData } from "./index";
+interface Props {
+  data: CalloutData;
+}
+const { data } = Astro.props as Props;
+const STYLE: Record<string, string> = {
+  note: "border-[var(--color-brand-swiss)] bg-blue-50",
+  warning: "border-amber-500 bg-amber-50",
+  success: "border-emerald-500 bg-emerald-50",
+  danger: "border-red-500 bg-red-50",
+};
+---
+
+<div class={`my-4 rounded-lg border-l-4 px-4 py-3 ${STYLE[data.variant] ?? STYLE.note}`} role="note">
+  {data.title && <p class="ty-small font-bold mb-1">{data.title}</p>}
+  <div class="fc-prose [&>p]:my-1" set:html={data.html} />
+</div>

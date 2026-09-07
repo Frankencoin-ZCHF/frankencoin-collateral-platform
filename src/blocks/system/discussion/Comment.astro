@@ -1,0 +1,23 @@
+---
+/* One discussion comment; recurses into replies via Astro.self. */
+import type { DiscussionComment } from "@/types";
+import { formatDate } from "@/lib/numbers";
+interface Props {
+  c: DiscussionComment;
+  depth?: number;
+}
+const { c, depth = 0 } = Astro.props as Props;
+const Self = Astro.self;
+---
+
+<li class={`flex gap-3 ${depth ? "ml-8 mt-3" : "mt-5"}`}>
+  {c.authorAvatar ? <img src={c.authorAvatar} alt="" class="h-7 w-7 rounded-full shrink-0 mt-0.5" loading="lazy" /> : <span class="h-7 w-7 rounded-full bg-[var(--color-neutral-300)] shrink-0" />}
+  <div class="min-w-0 flex-1">
+    <p class="ty-xs text-[var(--color-gray-75)]">
+      <span class="font-bold text-[var(--color-brand-deep-blue)]">{c.author ?? "ghost"}</span> · <a href={c.url} target="_blank" rel="noopener noreferrer" class="hover:underline">{formatDate(c.createdAt)}</a>
+      {c.upvotes > 0 && <span> · ▲ {c.upvotes}</span>}
+    </p>
+    <div class="fc-prose gh-body [&>p]:my-1.5" set:html={c.html} />
+    {c.replies.length > 0 && <ul>{c.replies.map((r) => <Self c={r} depth={depth + 1} />)}</ul>}
+  </div>
+</li>

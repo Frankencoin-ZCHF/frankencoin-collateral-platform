@@ -1,0 +1,96 @@
+/* Tokens de diseño para Tailwind v4 */
+@theme {
+  /* ========== FONTS ========== */
+  --font-sans:
+    "Avenir", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial;
+
+  /* ========== COLORS ========== */
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  /* Brand Colors */
+  --color-brand-swiss: #0f80f0;
+  --color-brand-deep-blue: #092f62;
+  --color-brand-titan-gray: #5d647b;
+  --color-brand-anthracite: #272b38;
+
+  /* Gray Scale */
+  --color-gray-10: #f9fafc;
+  --color-gray-15: #f7f7f9;
+  --color-gray-20: #dfe0e6;
+  --color-gray-30: #ced1da;
+  --color-gray-60: #8b92a8;
+  --color-gray-75: #5d647b;
+  --color-gray-80: #4f566e;
+
+  /* Blue Scale */
+  --color-blue-39: #065dc1;
+  --color-blue-50: #0f80f0;
+
+  /* Neutral Scale */
+  --color-neutral-100: #f9f9fb;
+  --color-neutral-200: #eeeef2;
+  --color-neutral-300: #d9dbe9;
+  --color-neutral-400: #b7bfd1;
+  --color-neutral-500: #94a2b8;
+  --color-neutral-550: #6e7c90;
+  --color-neutral-600: #475569;
+  --color-neutral-650: #333e4c;
+  --color-neutral-675: #283243;
+  --color-neutral-700: #1f2a3d;
+  --color-neutral-770: #1a2536;
+  --color-neutral-800: #101827;
+  --color-neutral-900: #020617;
+
+  /* ========== TYPOGRAPHY ========== */
+  --font-size-display: 64px;
+  --font-size-display-mobile: 42px;
+  --font-size-large-title: 48px;
+  --font-size-large-title-mobile: 38px;
+  --font-size-title-1: 32px;
+  --font-size--large-title: 48px;
+  --font-size-title-1-mobile: 32px;
+  --font-size--title-1-desktop: 32px;
+  --font-size--title-2-desktop: 26px;
+  --font-size--title-3-desktop: 20px;
+  --font-size-title-2: 26px;
+  --font-size-title-3: 18px;
+  --font-size-subtitle: 16px;
+  --font-size-body-1: 20px;
+  --font-size-body-1-mobile: 20px;
+  --font-size-body-2: 16px;
+  --font-size-body-2-mobile: 16px;
+  --font-size-body-3: 14px;
+  --font-size-xs: 12px;
+  --font-size-2xs: 11px;
+  --font-size-sm-stronger: 14px;
+
+  --line-height-display: 70px;
+  --line-height-display-mobile: 46px;
+  --line-height-large-title-mobile: 38px;
+  --line-height-title-1: 36px;
+  --line-height-title-1-mobile: 34px;
+  --line-height-subtitle: 21px;
+  --line-height-body-1: 27px;
+  --line-height-body-1-mobile: 26px;
+  --line-height-body-2: 23px;
+  --line-height-body-3: 20px;
+
+  /* ========== BORDER RADIUS ========== */
+  --radius-button-1: 4px;
+  --radius-button-2: 6px;
+  --radius-button-3: 8px;
+  --radius-button-4: 12px;
+  --radius-button-5: 16px;
+  --radius-button-6: 20px;
+
+  /* ========== SPACING ========== */
+  --spacing-xs: 4px;
+  --spacing-s: 8px;
+  --spacing-snudge: 6px;
+  --spacing-m: 16px;
+  --spacing-l: 20px;
+  --spacing-xl: 24px;
+  --spacing-xxl: 32px;
+}

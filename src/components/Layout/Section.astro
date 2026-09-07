@@ -1,0 +1,58 @@
+---
+/* Ported from frankencoin-site (default + split layouts; feature layout and
+   background images dropped — not needed here). */
+import Container from "./Container.astro";
+
+interface Props {
+  id?: string;
+  variant?: "plain" | "accent";
+  width?: "narrow" | "content" | "medium" | "wide" | "full";
+  align?: "left" | "center";
+  pad?: "none" | "xxs" | "xs" | "sm" | "md" | "lg";
+  eyebrow?: string;
+  title?: string;
+  subtitle?: string;
+  className?: string;
+}
+
+const {
+  id,
+  variant = "plain",
+  width = "wide",
+  align = "left",
+  pad = "md",
+  eyebrow,
+  title,
+  subtitle,
+  className = "",
+} = Astro.props as Props;
+
+const pads = {
+  none: "",
+  xxs: "py-[calc(var(--spacing-l)*1)] md:py-[calc(var(--spacing-l)*2)]",
+  xs: "py-[calc(var(--spacing-l)*2)] md:py-[calc(var(--spacing-l)*4)]",
+  sm: "py-[calc(var(--spacing-l)*3)] md:py-[calc(var(--spacing-l)*6)]",
+  md: "py-[calc(var(--spacing-l)*4)] md:py-[calc(var(--spacing-l)*8)]",
+  lg: "py-[calc(var(--spacing-l)*5)] md:py-[calc(var(--spacing-l)*10)]",
+}[pad];
+
+const bg = variant === "accent" ? "bg-[var(--color-gray-10)]" : "bg-[var(--color-white)]";
+const textAlign = align === "center" ? "text-center" : "text-left";
+---
+
+<section id={id} class={`${pads} ${bg} relative z-0 ${className}`}>
+  <Container width={width}>
+    <div class={textAlign}>
+      {
+        (eyebrow || title || subtitle) && (
+          <div class={`flex flex-col gap-2 mb-8 ${align === "center" ? "items-center" : "items-start"}`}>
+            {eyebrow && <p class="ty-subtitle">{eyebrow.toUpperCase()}</p>}
+            {title && <h2 class="ty-large-title">{title}</h2>}
+            {subtitle && <p class="ty-body-1 max-w-3xl">{subtitle}</p>}
+          </div>
+        )
+      }
+      <slot />
+    </div>
+  </Container>
+</section>

@@ -1,0 +1,88 @@
+---
+import Base from "@/layouts/Base.astro";
+import Section from "@/components/Layout/Section.astro";
+import CollateralHeader from "@/components/CollateralHeader.astro";
+import Unavailable from "@/components/Unavailable.astro";
+import ui from "@/content/ui.json";
+import { SYSTEM_BLOCKS, runBlocks, type BlockContext } from "@/blocks";
+import { describeForLog } from "@/lib/errors";
+import { isValidSlug, normalizeSha } from "@/lib/slug";
+import * as assessments from "@/services/assessments";
+import * as collaterals from "@/services/collaterals";
+import type { Assessment, VersionRef } from "@/types";
+
+export const prerender = false;
+
+const slug = (Astro.params.slug ?? "").toLowerCase();
+if (!isValidSlug(slug)) return Astro.rewrite("/404");
+
+const record = await collaterals.bySlug(slug).catch((e) => {
+  console.error(`[collateral/${slug}] ${describeForLog(e)}`);
+  return null;
+});
+if (!record) return Astro.rewrite("/404");
+
+// Versions (best effort) and the requested historical version.
+const requestedSha = normalizeSha(Astro.url.searchParams.get("v"));
+let versions: VersionRef[] = [];
+let assessment: Assessment | null = record.assessment;
+let version: VersionRef | null = record.assessment?.ref ?? null;
+let isHistorical = false;
+let versionError: string | null = null;
+
+if (record.assessment) {
+  try {
+    versions = await assessments.versions(slug);
+    if (requestedSha) {
+      const at = await assessments.atVersion(slug, requestedSha);
+      assessment = at.assessment;
+      version = at.version;
+      isHistorical = versions[0]?.sha !== at.version.sha;
+    } else if (versions[0]) {
+      version = versions[0];
+    }
+  } catch (e) {
+    console.error(`[collateral/${slug}] versions: ${describeForLog(e)}`);
+    versionError = requestedSha ? "That version could not be loaded — showing the latest." : null;
+  }
+}
+
+const ctx: BlockContext = { record, assessment, isHistorical, version, versions, origin: Astro.url.origin };
+const results = await runBlocks(SYSTEM_BLOCKS, ctx);
+
+const title = `${record.name} (${record.ticker})`;
+const description = assessment
+  ? `${record.ticker} collateral risk assessment (${assessment.status}): free float ${assessment.data.scores.freeFloat ?? "n/a"}, market risk ${assessment.data.scores.marketRiskPct ?? "n/a"}%, retained reserve ${assessment.data.params.retainedReservePct ?? "n/a"}%. Live positions, discussion and version history.`
+  : `${record.ticker} is used as collateral for Frankencoin. Live positions, prices and challenges.`;
+
+Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600, s-maxage=3600" : "public, max-age=60, s-maxage=60");
+---
+
+<Base title={title} description={description} type="article" noindex={isHistorical}>
+  <Section variant="accent" pad="xs" width="wide">
+    <CollateralHeader ctx={ctx} />
+    {versionError && <div class="mt-4"><Unavailable compact message={versionError} /></div>}
+  </Section>
+
+  <Section pad="xxs" width="wide">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {
+        results.map((r) => (
+          <section id={r.block.id} class={`fc-card p-5 min-w-0 ${r.block.span === "half" ? "" : "lg:col-span-2"}`} aria-labelledby={`${r.block.id}-title`}>
+            <h2 id={`${r.block.id}-title`} class="fc-card-title mb-4">{r.block.title}</h2>
+            {r.status === "ok" ? <r.block.Component data={r.data} ctx={ctx} /> : <Unavailable message={`${r.block.title}: ${r.error ?? ui.labels.unavailable}`} />}
+          </section>
+        ))
+      }
+    </div>
+    {
+      results.length === 0 && (
+        <Unavailable message="Nothing to show for this collateral yet." />
+      )
+    }
+  </Section>
+</Base>
+
+<script>
+  import "@/scripts/charts";
+</script>

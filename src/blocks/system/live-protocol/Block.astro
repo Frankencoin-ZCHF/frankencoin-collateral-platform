@@ -1,0 +1,62 @@
+---
+import type { LiveCollateral } from "@/types";
+import { formatCompact, formatDateTime, formatNumber, formatPercent, formatPrice } from "@/lib/numbers";
+interface Props {
+  data: LiveCollateral;
+}
+const { data: l } = Astro.props as Props;
+const chg = l.market?.change24hPct ?? null;
+---
+
+<div class="fc-kv !grid-cols-2 lg:!grid-cols-3">
+  <div>
+    <p class="fc-kv-label">Price</p>
+    <p class="fc-kv-value">{l.price ? `${formatPrice(l.price.chf)} CHF` : "–"}</p>
+    <p class="fc-kv-unit">
+      {l.price && `$${formatPrice(l.price.usd)}`}
+      {chg !== null && <span class={chg >= 0 ? "text-emerald-700" : "text-red-700"}> · {chg >= 0 ? "+" : ""}{formatPercent(chg, 1)} 24h</span>}
+    </p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Minted ZCHF</p>
+    <p class="fc-kv-value">{formatCompact(l.totalMintedZchf)}</p>
+    <p class="fc-kv-unit">{formatCompact(l.availableForMintingZchf)} still mintable</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Collateral locked</p>
+    <p class="fc-kv-value">{l.collateralValueChf === null ? "–" : `${formatCompact(l.collateralValueChf)} CHF`}</p>
+    <p class="fc-kv-unit">{formatNumber(l.totalCollateral, l.totalCollateral < 10 ? 4 : 2)} {l.symbol}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Positions</p>
+    <p class="fc-kv-value">{l.positions.active}</p>
+    <p class="fc-kv-unit">active · {l.positions.total} total</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Utilisation</p>
+    <p class="fc-kv-value">{formatPercent(l.utilizationPct, 1)}</p>
+    <p class="fc-kv-unit">minted ÷ collateral value</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Risk premium</p>
+    <p class="fc-kv-value">{formatPercent(l.riskPremiumPct?.weightedAvg ?? null)}</p>
+    <p class="fc-kv-unit">{l.riskPremiumPct && l.riskPremiumPct.min !== l.riskPremiumPct.max ? `${formatPercent(l.riskPremiumPct.min)} – ${formatPercent(l.riskPremiumPct.max)}` : "weighted by minted"}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Total borrow rate</p>
+    <p class="fc-kv-value">{formatPercent(l.annualInterestPct?.weightedAvg ?? null)}</p>
+    <p class="fc-kv-unit">lead rate + premium</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Reserve contribution</p>
+    <p class="fc-kv-value">{formatPercent(l.reserveContributionPct?.weightedAvg ?? null, 1)}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Challenges</p>
+    <p class="fc-kv-value">{l.challenges.active}</p>
+    <p class="fc-kv-unit">active · {l.challenges.total} total</p>
+  </div>
+</div>
+<p class="ty-2xs text-[var(--color-gray-60)] mt-4">
+  {l.price?.source && `Price via ${l.price.source}`}{l.price?.timestamp && ` · ${formatDateTime(l.price.timestamp)}`} · <a href="https://api.frankencoin.com" target="_blank" rel="noopener noreferrer" class="underline">api.frankencoin.com ↗</a>
+</p>

@@ -1,0 +1,34 @@
+---
+import type { NarrativeData } from "./index";
+import ContentBlock from "@/blocks/content/ContentBlock.astro";
+interface Props {
+  data: NarrativeData;
+}
+const { data } = Astro.props as Props;
+const h2s = data.headings.filter((h) => h.level === 2);
+---
+
+<div class="flex flex-col lg:flex-row gap-8">
+  {
+    h2s.length > 2 && (
+      <aside class="lg:w-56 shrink-0 lg:sticky lg:top-24 self-start order-first">
+        <p class="fc-card-title mb-2">Sections</p>
+        <nav class="flex flex-col gap-1">
+          {h2s.map((h) => (
+            <a href={`#${h.id}`} class="ty-small text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)]">{h.text}</a>
+          ))}
+        </nav>
+      </aside>
+    )
+  }
+  <article class="fc-prose min-w-0 flex-1 max-w-3xl">
+    {
+      data.sections.map((s) => (
+        <section>
+          {s.heading && <h2 id={s.id ?? undefined}>{s.heading}</h2>}
+          {s.parts.map((p) => (p.block ? <ContentBlock result={p.block} /> : <Fragment set:html={p.html} />))}
+        </section>
+      ))
+    }
+  </article>
+</div>

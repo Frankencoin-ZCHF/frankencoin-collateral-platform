@@ -1,0 +1,14 @@
+{
+  "name": "Frankencoin Collateral Platform",
+  "short_name": "Collaterals",
+  "description": "Risk assessments, on-chain data and community discussion for every Frankencoin (ZCHF) collateral.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0A2540",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "32x32", "type": "image/png", "purpose": "any" },
+    { "src": "/images/webclip.png", "sizes": "256x256", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["finance", "business"]
+}

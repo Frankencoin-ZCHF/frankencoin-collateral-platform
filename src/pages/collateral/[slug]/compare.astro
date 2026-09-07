@@ -1,0 +1,166 @@
+---
+import Base from "@/layouts/Base.astro";
+import Section from "@/components/Layout/Section.astro";
+import Button from "@/components/Button/Button.astro";
+import Unavailable from "@/components/Unavailable.astro";
+import { formatDiffValue, structuredDiff, textPatch } from "@/lib/diff";
+import { describeForLog } from "@/lib/errors";
+import { formatDateTime } from "@/lib/numbers";
+import { isValidSlug, normalizeSha } from "@/lib/slug";
+import * as assessments from "@/services/assessments";
+import * as collaterals from "@/services/collaterals";
+import * as Diff2Html from "diff2html";
+import "diff2html/bundles/css/diff2html.min.css";
+
+export const prerender = false;
+
+const slug = (Astro.params.slug ?? "").toLowerCase();
+if (!isValidSlug(slug)) return Astro.rewrite("/404");
+const record = await collaterals.bySlug(slug).catch(() => null);
+if (!record?.assessment) return Astro.rewrite("/404");
+
+const from = normalizeSha(Astro.url.searchParams.get("from"));
+const to = normalizeSha(Astro.url.searchParams.get("to"));
+
+let error: string | null = null;
+let a: Awaited<ReturnType<typeof assessments.atVersion>> | null = null;
+let b: Awaited<ReturnType<typeof assessments.atVersion>> | null = null;
+const versions = await assessments.versions(slug).catch(() => []);
+
+if (!from || !to) error = "Pick two versions to compare.";
+else if (from === to) error = "Those are the same version.";
+else {
+  try {
+    [a, b] = await Promise.all([assessments.atVersion(slug, from), assessments.atVersion(slug, to)]);
+  } catch (e) {
+    console.error(`[compare/${slug}] ${describeForLog(e)}`);
+    error = "One of the requested versions could not be loaded.";
+  }
+}
+
+const changes = a && b ? structuredDiff(a.assessment.raw, b.assessment.raw) : [];
+const patch = a && b ? textPatch(`${a.version.path}@${a.version.shortSha}`, `${b.version.path}@${b.version.shortSha}`, a.assessment.body, b.assessment.body) : "";
+const hasTextChanges = patch.split("\n").some((l) => /^[+-](?![+-])/.test(l));
+const diffOpts = { drawFileList: false, matching: "lines" as const, outputFormat: "side-by-side" as const, renderNothingWhenEmpty: true };
+const sideBySide = a && b && hasTextChanges ? Diff2Html.html(patch, diffOpts) : "";
+const unified = a && b && hasTextChanges ? Diff2Html.html(patch, { ...diffOpts, outputFormat: "line-by-line" }) : "";
+
+const GROUP_LABEL: Record<string, string> = { risk_parameters: "Risk parameters", risk_scores: "Risk scores", links: "Links", blocks: "Content blocks" };
+const groupOrder = ["risk_parameters", "risk_scores", "links", "blocks"];
+const grouped = groupOrder
+  .concat([...new Set(changes.map((c) => c.group))].filter((g) => !groupOrder.includes(g)))
+  .map((g) => ({ group: g, label: GROUP_LABEL[g] ?? "General", items: changes.filter((c) => c.group === g) }))
+  .filter((g) => g.items.length);
+
+Astro.response.headers.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
+---
+
+<Base title={`Compare versions · ${record.ticker}`} noindex>
+  <Section variant="accent" pad="xs" width="wide">
+    <nav class="ty-xs text-[var(--color-gray-75)] mb-3" aria-label="Breadcrumb">
+      <a href="/" class="hover:underline">Collaterals</a> › <a href={`/collateral/${slug}`} class="hover:underline">{record.ticker}</a> › Compare
+    </nav>
+    <h1 class="ty-large-title">{record.name} — version comparison</h1>
+
+    <form method="get" class="mt-4 flex flex-col md:flex-row md:items-end gap-3">
+      {
+        (["from", "to"] as const).map((name) => (
+          <label class="flex flex-col gap-1 ty-xs text-[var(--color-gray-75)] uppercase tracking-wider">
+            {name === "from" ? "From (older)" : "To (newer)"}
+            <select name={name} class="rounded-lg border border-[var(--color-gray-30)] bg-white px-3 py-2 ty-small normal-case tracking-normal min-w-72">
+              {versions.map((v) => (
+                <option value={v.sha} selected={(name === "from" ? from : to) === v.sha}>
+                  {formatDateTime(v.date)} · {v.shortSha} · {v.message.slice(0, 40)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))
+      }
+      <Button variant="primary" size="sm" rounded="full" type="submit">Compare</Button>
+      <Button href={`/collateral/${slug}`} variant="ghost" size="sm">Back to {record.ticker}</Button>
+    </form>
+  </Section>
+
+  <Section pad="xxs" width="wide">
+    {error && <Unavailable message={error} />}
+    {
+      a && b && (
+        <div class="flex flex-col gap-6">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {[a, b].map((x, i) => (
+              <div class="fc-card p-4">
+                <p class="fc-card-title">{i === 0 ? "From" : "To"}</p>
+                <p class="ty-small font-bold text-[var(--color-brand-deep-blue)] mt-1">{x.version.message}</p>
+                <p class="ty-xs text-[var(--color-gray-75)]">
+                  {formatDateTime(x.version.date)} · {x.version.authorLogin ?? x.version.author} · <a href={x.version.url} target="_blank" rel="noopener noreferrer" class="font-mono underline">{x.version.shortSha}</a> · {x.version.path}
+                </p>
+                <a href={`/collateral/${slug}?v=${x.version.sha}`} class="ty-xs text-[var(--color-blue-39)] underline">view this version</a>
+              </div>
+            ))}
+          </div>
+
+          <section class="fc-card p-5">
+            <h2 class="fc-card-title mb-3">Structured data ({changes.length} change{changes.length === 1 ? "" : "s"})</h2>
+            {changes.length === 0 ? (
+              <p class="ty-small text-[var(--color-gray-75)]">No changes in the frontmatter between these versions.</p>
+            ) : (
+              <div class="overflow-x-auto">
+                <table class="fc-table">
+                  <thead>
+                    <tr>
+                      <th>Field</th>
+                      <th>Before</th>
+                      <th>After</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grouped.flatMap((g) => [
+                      <tr>
+                        <td colspan="3" class="bg-[var(--color-gray-10)] font-bold text-[var(--color-brand-deep-blue)] ty-xs uppercase tracking-wider">{g.label}</td>
+                      </tr>,
+                      ...g.items.map((c) => (
+                        <tr class={g.group === "risk_parameters" ? "bg-amber-50/40" : ""}>
+                          <td class="font-mono ty-xs">{c.key}</td>
+                          <td class={`ty-small ${c.kind === "added" ? "text-[var(--color-gray-60)]" : "text-red-800 bg-red-50"}`}>{c.kind === "added" ? "—" : formatDiffValue(c.before)}</td>
+                          <td class={`ty-small ${c.kind === "removed" ? "text-[var(--color-gray-60)]" : "text-emerald-800 bg-emerald-50"}`}>{c.kind === "removed" ? "—" : formatDiffValue(c.after)}</td>
+                        </tr>
+                      )),
+                    ])}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section class="fc-card p-5" x-data="{ mode: 'side' }">
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <h2 class="fc-card-title">Narrative (markdown)</h2>
+              {hasTextChanges && (
+                <div class="flex gap-1" role="group" aria-label="Diff layout">
+                  <button type="button" @click="mode = 'side'" :class="mode === 'side' ? 'bg-[var(--color-brand-deep-blue)] text-white' : 'bg-white'" class="ty-xs px-3 py-1 rounded-full border border-[var(--color-gray-30)]">Side by side</button>
+                  <button type="button" @click="mode = 'unified'" :class="mode === 'unified' ? 'bg-[var(--color-brand-deep-blue)] text-white' : 'bg-white'" class="ty-xs px-3 py-1 rounded-full border border-[var(--color-gray-30)]">Unified</button>
+                </div>
+              )}
+            </div>
+            {hasTextChanges ? (
+              <>
+                <div x-show="mode === 'side'" class="overflow-x-auto" set:html={sideBySide} />
+                <div x-show="mode === 'unified'" x-cloak class="overflow-x-auto" set:html={unified} />
+              </>
+            ) : (
+              <p class="ty-small text-[var(--color-gray-75)]">No changes in the narrative between these versions.</p>
+            )}
+          </section>
+        </div>
+      )
+    }
+  </Section>
+</Base>
+
+<style is:global>
+  .d2h-wrapper { font-size: 12px; }
+  .d2h-file-header { display: none; }
+  .d2h-file-wrapper { border-color: var(--color-gray-20); border-radius: 8px; }
+  .d2h-code-line, .d2h-code-side-line { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>

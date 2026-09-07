@@ -1,0 +1,22 @@
+---
+import type { EmbedSpec } from "./index";
+interface Props {
+  data: EmbedSpec;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="fc-card p-2 my-4 overflow-hidden">
+  {data.title && <p class="fc-card-title px-2 pt-2 mb-2">{data.title}</p>}
+  <iframe
+    src={data.url}
+    title={data.title ?? "Embedded content"}
+    height={data.height}
+    class="w-full rounded-lg border-0"
+    loading="lazy"
+    sandbox="allow-scripts allow-same-origin allow-popups"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen
+  ></iframe>
+  <p class="ty-2xs text-[var(--color-gray-60)] px-2 pb-1 pt-2"><a href={data.url} target="_blank" rel="noopener noreferrer" class="underline">Open in a new tab ↗</a></p>
+</div>

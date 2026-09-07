@@ -1,0 +1,17 @@
+---
+import Base from "@/layouts/Base.astro";
+import Section from "@/components/Layout/Section.astro";
+import Button from "@/components/Button/Button.astro";
+
+export const prerender = false;
+Astro.response.status = 404;
+---
+
+<Base title="Not found" noindex>
+  <Section pad="md" align="center" width="narrow">
+    <p class="ty-subtitle">404</p>
+    <h1 class="ty-large-title">Nothing here</h1>
+    <p class="ty-body-1 text-[var(--color-neutral-650)] mt-2 mb-6">That collateral or page does not exist (yet).</p>
+    <Button href="/" variant="primary" rounded="full">All collaterals</Button>
+  </Section>
+</Base>

@@ -1,0 +1,26 @@
+---
+import type { ApiData } from "./index";
+interface Props {
+  data: ApiData;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="fc-card p-4 my-4">
+  <div class="flex items-center justify-between gap-2 mb-3">
+    <p class="fc-card-title">{data.title}</p>
+    <p class="ty-2xs text-[var(--color-gray-60)]">
+      Source: {data.link ? <a href={data.link} target="_blank" rel="noopener noreferrer" class="underline">{data.source} ↗</a> : data.source}
+    </p>
+  </div>
+  <div class="fc-kv">
+    {
+      data.values.map((v) => (
+        <div>
+          <p class="fc-kv-label">{v.label}</p>
+          <p class="fc-kv-value">{v.value}</p>
+        </div>
+      ))
+    }
+  </div>
+</div>

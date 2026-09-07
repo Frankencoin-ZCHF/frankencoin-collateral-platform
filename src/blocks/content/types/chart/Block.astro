@@ -1,0 +1,13 @@
+---
+import type { ChartData } from "./index";
+interface Props {
+  data: ChartData;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="fc-card p-4 my-4">
+  {data.title && <p class="fc-card-title mb-2">{data.title}</p>}
+  <div data-chart={data.kind} data-series={JSON.stringify(data.payload)} class="h-64 w-full"></div>
+  {data.source && <p class="ty-2xs text-[var(--color-gray-60)] mt-2">Source: {data.source}</p>}
+</div>

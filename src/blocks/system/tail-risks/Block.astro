@@ -1,0 +1,50 @@
+---
+import type { TailRisksData } from "./index";
+import Pill from "@/components/Pill.astro";
+import { formatPercent } from "@/lib/numbers";
+interface Props {
+  data: TailRisksData;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="overflow-x-auto">
+  <table class="fc-table">
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Risk</th>
+        <th>Probability</th>
+        <th>Severity</th>
+        <th class="fc-num">Compensation</th>
+        <th class="fc-num">Expected loss</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        data.groups.flatMap((g) =>
+          g.risks.map((r, i) => (
+            <tr>
+              <td class="whitespace-nowrap font-bold text-[var(--color-brand-deep-blue)]">{i === 0 ? g.label : ""}</td>
+              <td>{r.name}</td>
+              <td><Pill value={r.probability} /></td>
+              <td><Pill value={r.severity} /></td>
+              <td class="fc-num">{formatPercent(r.compensationPct)}</td>
+              <td class="fc-num text-[var(--color-gray-75)]">{r.expectedLossPct === null ? "–" : formatPercent(r.expectedLossPct)}</td>
+            </tr>
+          )),
+        )
+      }
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="4" class="font-bold text-[var(--color-brand-deep-blue)]">Total tail-risk compensation</td>
+        <td class="fc-num font-bold">{formatPercent(data.totalCompensationPct)}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+<p class="ty-2xs text-[var(--color-gray-60)] mt-3">
+  Expected loss = framework probability × severity (Negligible &lt;0.5% · Very Low 0.5% · Low 1% · Medium 2–5% · High &gt;5% ; Moderate 25% · Severe 50% · Critical 100%). See the <a href="/framework" class="underline">risk framework</a>.
+</p>

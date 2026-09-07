@@ -1,0 +1,45 @@
+---
+import type { DefillamaData } from "./index";
+import { formatCompact } from "@/lib/numbers";
+interface Props {
+  data: DefillamaData;
+  title?: string;
+}
+const { data, title } = Astro.props as Props;
+const total = data.chains.reduce((n, c) => n + c.tvlUsd, 0) || 1;
+---
+
+<div class="fc-card p-4 my-4">
+  <div class="flex items-center justify-between gap-2 mb-3">
+    <div class="flex items-center gap-2">
+      {data.logo && <img src={data.logo} alt="" class="h-6 w-6 rounded-full" loading="lazy" />}
+      <p class="fc-card-title">{title ?? `${data.name} · DefiLlama`}</p>
+    </div>
+    <a href={data.url} target="_blank" rel="noopener noreferrer" class="ty-xs text-[var(--color-blue-39)] underline">defillama.com ↗</a>
+  </div>
+  <div class="flex flex-col md:flex-row gap-6">
+    <div>
+      <p class="fc-kv-label">Total value locked</p>
+      <p class="fc-kv-value">{data.tvlUsd === null ? "–" : `$${formatCompact(data.tvlUsd)}`}</p>
+      {data.category && <p class="fc-kv-unit">{data.category}</p>}
+    </div>
+    {
+      data.chains.length > 0 && (
+        <div class="flex-1 min-w-0">
+          <p class="fc-kv-label mb-1">By chain</p>
+          <ul class="flex flex-col gap-1">
+            {data.chains.map((c) => (
+              <li class="flex items-center gap-2 ty-xs">
+                <span class="w-24 shrink-0 truncate">{c.chain}</span>
+                <span class="flex-1 h-2 rounded bg-[var(--color-neutral-200)] overflow-hidden">
+                  <span class="block h-full bg-[var(--color-brand-deep-blue)]" style={`width:${Math.max(2, (c.tvlUsd / total) * 100)}%`} />
+                </span>
+                <span class="w-16 text-right tabular-nums">${formatCompact(c.tvlUsd)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+  </div>
+</div>

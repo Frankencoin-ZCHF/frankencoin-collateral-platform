@@ -1,0 +1,52 @@
+---
+/* SSR fallback table for the overview (crawlers, no-JS, and first paint before the grid mounts). */
+import type { CollateralRow } from "@/lib/rows";
+import { formatCompact, formatPercent, formatPrice } from "@/lib/numbers";
+import Pill from "./Pill.astro";
+
+interface Props {
+  rows: CollateralRow[];
+}
+const { rows } = Astro.props as Props;
+---
+
+<div data-grid-fallback class="overflow-x-auto rounded-xl border border-[var(--color-gray-20)]">
+  <table class="fc-table">
+    <thead>
+      <tr>
+        <th>Ticker</th>
+        <th>Name</th>
+        <th>Assessment</th>
+        <th>Free float</th>
+        <th>Public info</th>
+        <th class="fc-num">Market risk</th>
+        <th class="fc-num">Retained reserve</th>
+        <th class="fc-num">Price CHF</th>
+        <th class="fc-num">Positions</th>
+        <th class="fc-num">Minted ZCHF</th>
+        <th class="fc-num">Collateral CHF</th>
+        <th class="fc-num">Risk premium</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        rows.map((r) => (
+          <tr>
+            <td><a href={r.url} class="font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">{r.ticker}</a></td>
+            <td>{r.name}</td>
+            <td><Pill value={r.status === "none" ? "on-chain only" : r.status} kind={r.status} /></td>
+            <td><Pill value={r.freeFloat} /></td>
+            <td><Pill value={r.publicInformation} /></td>
+            <td class="fc-num">{formatPercent(r.marketRiskPct)}</td>
+            <td class="fc-num">{formatPercent(r.retainedReservePct, 1)}</td>
+            <td class="fc-num">{formatPrice(r.priceChf)}</td>
+            <td class="fc-num">{r.positionsActive ?? "–"}</td>
+            <td class="fc-num">{formatCompact(r.mintedZchf)}</td>
+            <td class="fc-num">{formatCompact(r.collateralValueChf)}</td>
+            <td class="fc-num">{formatPercent(r.riskPremiumAvgPct)}</td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>

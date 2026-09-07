@@ -1,0 +1,59 @@
+---
+import type { CoingeckoData } from "./index";
+import { formatCompact, formatDateTime, formatNumber, formatPercent, formatPrice } from "@/lib/numbers";
+interface Props {
+  data: CoingeckoData;
+  title?: string;
+}
+const { data, title } = Astro.props as Props;
+
+const LABEL: Record<string, string> = {
+  price: "Price",
+  change_24h: "24h",
+  change_7d: "7d",
+  change_30d: "30d",
+  market_cap: "Market cap",
+  fdv: "Fully diluted",
+  volume_24h: "24h volume",
+  ath: "All-time high",
+  ath_change: "From ATH",
+  circulating_supply: "Circulating",
+  total_supply: "Total supply",
+  rank: "Rank",
+};
+function fmt(key: string, v: number | null): string {
+  if (v === null) return "–";
+  if (key === "price" || key === "ath") return `$${formatPrice(v)}`;
+  if (key.startsWith("change") || key === "ath_change") return formatPercent(v, 1);
+  if (key === "rank") return `#${formatNumber(v, 0)}`;
+  if (key.endsWith("supply")) return formatCompact(v);
+  return `$${formatCompact(v)}`;
+}
+const signed = (key: string) => key.startsWith("change") || key === "ath_change";
+---
+
+<div class="fc-card p-4 my-4">
+  <div class="flex items-center justify-between gap-2 mb-3">
+    <div class="flex items-center gap-2">
+      {data.image && <img src={data.image} alt="" class="h-6 w-6 rounded-full" loading="lazy" />}
+      <p class="fc-card-title">{title ?? `${data.name} (${data.symbol}) · CoinGecko`}</p>
+    </div>
+    <a href={data.url} target="_blank" rel="noopener noreferrer" class="ty-xs text-[var(--color-blue-39)] underline">coingecko.com ↗</a>
+  </div>
+  <div class="fc-kv">
+    {
+      data.show.map((key) => {
+        const v = data.values[key] ?? null;
+        const color = signed(key) && v !== null ? (v > 0 ? "text-emerald-700" : v < 0 ? "text-red-700" : "") : "";
+        return (
+          <div>
+            <p class="fc-kv-label">{LABEL[key] ?? key}</p>
+            <p class={`fc-kv-value ${color}`}>{fmt(key, v)}</p>
+            {key === "price" && data.values.price_chf != null && <p class="fc-kv-unit">{formatPrice(data.values.price_chf)} CHF</p>}
+          </div>
+        );
+      })
+    }
+  </div>
+  {data.updatedAt && <p class="ty-2xs text-[var(--color-gray-60)] mt-3">Updated {formatDateTime(data.updatedAt)}</p>}
+</div>

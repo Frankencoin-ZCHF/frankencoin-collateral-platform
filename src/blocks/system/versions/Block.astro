@@ -1,0 +1,39 @@
+---
+import type { VersionsData } from "./index";
+import { formatDateTime } from "@/lib/numbers";
+interface Props {
+  data: VersionsData;
+}
+const { data } = Astro.props as Props;
+const latest = data.versions[0]!;
+---
+
+<ol class="relative border-l border-[var(--color-gray-20)] ml-2">
+  {
+    data.versions.map((v, i) => {
+      const prev = data.versions[i + 1];
+      const isCurrent = data.current ? v.sha === data.current : i === 0;
+      const folder = v.path.split("/")[1];
+      return (
+        <li class="ml-5 pb-4 last:pb-0">
+          <span class={`absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full ${isCurrent ? "bg-[var(--color-brand-swiss)]" : "bg-[var(--color-gray-30)]"}`} />
+          <div class="flex flex-col md:flex-row md:items-baseline gap-x-3 gap-y-1">
+            <a href={i === 0 ? `/collateral/${data.slug}` : `/collateral/${data.slug}?v=${v.sha}`} class={`ty-small ${isCurrent ? "font-bold text-[var(--color-brand-deep-blue)]" : "text-[var(--color-blue-39)] hover:underline"}`}>{v.message || "(no message)"}</a>
+            <span class="ty-xs text-[var(--color-gray-75)]">
+              {formatDateTime(v.date)} · {v.authorLogin ?? v.author} · <a href={v.url} target="_blank" rel="noopener noreferrer" class="font-mono hover:underline">{v.shortSha}</a>
+              {folder && <span class="fc-pill fc-pill-neutral ml-1 !text-[10px] !py-0">{folder}</span>}
+              {i === 0 && <span class="fc-pill fc-pill-brand ml-1 !text-[10px] !py-0">latest</span>}
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-3 mt-1 ty-2xs">
+            {prev && <a href={`/collateral/${data.slug}/compare?from=${prev.sha}&to=${v.sha}`} class="text-[var(--color-blue-39)] underline">diff vs previous</a>}
+            {i !== 0 && <a href={`/collateral/${data.slug}/compare?from=${v.sha}&to=${latest.sha}`} class="text-[var(--color-blue-39)] underline">diff vs latest</a>}
+          </div>
+        </li>
+      );
+    })
+  }
+</ol>
+<p class="ty-2xs text-[var(--color-gray-60)] mt-4">
+  One entry per commit that touched the assessment file, across the draft / published / deprecated folders. <a href={data.historyUrl} target="_blank" rel="noopener noreferrer" class="underline">Full history on GitHub ↗</a>
+</p>

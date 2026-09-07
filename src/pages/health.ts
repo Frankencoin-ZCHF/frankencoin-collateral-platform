@@ -1,0 +1,49 @@
+import type { APIRoute } from "astro";
+import { config } from "@/config";
+import { size as cacheSize } from "@/lib/cache";
+import { describeForLog } from "@/lib/errors";
+import { rateLimits } from "@/upstream/client";
+import * as github from "@/upstream/github";
+import * as assessments from "@/services/assessments";
+import * as protocol from "@/services/protocol";
+import { blockIssues } from "@/blocks/content/registry";
+
+export const prerender = false;
+
+export const GET: APIRoute = async () => {
+  const started = Date.now();
+  const [idx, snap] = await Promise.allSettled([assessments.index(), protocol.snapshot()]);
+
+  const sources = {
+    github: idx.status === "fulfilled" ? "ok" : "error",
+    frankencoinApi: snap.status === "fulfilled" ? (snap.value.degraded.length ? "degraded" : "ok") : "error",
+    discussions: github.hasToken() ? "configured" : "no-token",
+    coingecko: config.coingeckoApiKey ? "pro" : "public",
+  };
+  const ok = sources.github === "ok" && sources.frankencoinApi !== "error";
+
+  const body = {
+    ok,
+    status: ok ? "ok" : "degraded",
+    version: "0.1.0",
+    uptimeSeconds: Math.round(process.uptime()),
+    latencyMs: Date.now() - started,
+    sources,
+    assessments:
+      idx.status === "fulfilled"
+        ? { count: idx.value.items.length, head: idx.value.head?.sha ?? null, fetchedAt: idx.value.fetchedAt, failures: idx.value.failures }
+        : { error: describeForLog(idx.reason).split(":")[0] },
+    protocol:
+      snap.status === "fulfilled"
+        ? { collaterals: snap.value.byAddress.size, fetchedAt: snap.value.fetchedAt, degraded: snap.value.degraded }
+        : { error: describeForLog(snap.reason).split(":")[0] },
+    contentBlockIssues: blockIssues(),
+    rateLimits,
+    cache: { enabled: config.cacheEnabled, entries: cacheSize() },
+  };
+
+  return new Response(JSON.stringify(body, null, 2), {
+    status: ok ? 200 : 503,
+    headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+  });
+};

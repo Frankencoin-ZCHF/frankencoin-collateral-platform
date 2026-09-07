@@ -1,0 +1,43 @@
+---
+import type { ChallengesData } from "./index";
+import Pill from "@/components/Pill.astro";
+import { formatDateTime, formatNumber, formatPrice, shortAddress } from "@/lib/numbers";
+interface Props {
+  data: ChallengesData;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="overflow-x-auto">
+  <table class="fc-table">
+    <thead>
+      <tr>
+        <th>Started</th>
+        <th>Position</th>
+        <th>Challenger</th>
+        <th class="fc-num">Size ({data.symbol})</th>
+        <th class="fc-num">Filled</th>
+        <th class="fc-num">Liq. price</th>
+        <th class="fc-num">Bids</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        data.list.map((c) => (
+          <tr>
+            <td class="whitespace-nowrap">{formatDateTime(c.startedAt)}</td>
+            <td><a href={`https://app.frankencoin.com/monitoring/${c.position}`} target="_blank" rel="noopener noreferrer" class="font-mono ty-xs text-[var(--color-blue-39)]">{shortAddress(c.position, 6)}</a></td>
+            <td><a href={`https://etherscan.io/address/${c.challenger}`} target="_blank" rel="noopener noreferrer" class="font-mono ty-xs">{shortAddress(c.challenger)}</a></td>
+            <td class="fc-num">{formatNumber(c.size, c.size < 10 ? 4 : 2)}</td>
+            <td class="fc-num">{c.size > 0 ? `${Math.round((c.filledSize / c.size) * 100)}%` : "–"}</td>
+            <td class="fc-num">{formatPrice(c.liquidationPriceZchf)}</td>
+            <td class="fc-num">{c.bids}</td>
+            <td><Pill value={c.isActive ? "Active" : c.status} kind={c.isActive ? "live" : "neutral"} /></td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>
+<p class="ty-2xs text-[var(--color-gray-60)] mt-3">Most recent 25. Full history on <a href="https://app.frankencoin.com/challenges" target="_blank" rel="noopener noreferrer" class="underline">app.frankencoin.com ↗</a>.</p>

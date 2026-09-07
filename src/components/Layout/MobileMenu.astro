@@ -1,0 +1,53 @@
+---
+import Button from "@/components/Button/Button.astro";
+import ui from "@/content/ui.json";
+
+const { links, cta } = ui.nav;
+---
+
+<div
+  class="fixed left-0 right-0 top-[60px] h-[calc(100vh-60px)] w-full bg-[var(--color-gray-15)] shadow-lg overflow-y-auto animate-slide-down"
+  id="mobile-menu"
+>
+  <nav class="flex flex-col gap-2 px-5 pt-8 pb-6" aria-label="Mobile">
+    {
+      links.map((l) => (
+        <a
+          href={l.href}
+          target={l.external ? "_blank" : undefined}
+          rel={l.external ? "noopener noreferrer" : undefined}
+          class="mobile-nav-link ty-body-1-mobile block rounded-lg px-4 py-3 text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)] active:text-[var(--color-brand-swiss)]"
+        >
+          {l.label}
+        </a>
+      ))
+    }
+    <hr class="text-[var(--color-neutral-300)]" />
+    <div class="mt-4 flex flex-col gap-4">
+      <Button href={cta.href} variant="primary" rounded="full" size="md" external={true}>
+        {cta.label}
+      </Button>
+    </div>
+  </nav>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const mobileMenu = document.getElementById("mobile-menu");
+    mobileMenu?.querySelectorAll(".mobile-nav-link").forEach((link) => {
+      link.addEventListener("click", () => {
+        mobileMenu?.closest("details")?.removeAttribute("open");
+      });
+    });
+  });
+</script>
+
+<style>
+  @keyframes slide-down {
+    from { transform: translateY(-100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .animate-slide-down {
+    animation: slide-down 0.3s ease-out forwards;
+  }
+</style>

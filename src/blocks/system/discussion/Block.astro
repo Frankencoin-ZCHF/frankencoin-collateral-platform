@@ -1,0 +1,82 @@
+---
+import type { DiscussionResult } from "@/services/discussions";
+import Button from "@/components/Button/Button.astro";
+import Unavailable from "@/components/Unavailable.astro";
+import Comment from "./Comment.astro";
+import ui from "@/content/ui.json";
+import { formatDate } from "@/lib/numbers";
+interface Props {
+  data: DiscussionResult;
+}
+const { data } = Astro.props as Props;
+const d = data.primary;
+---
+
+{
+  !data.available ? (
+    <div class="flex flex-col gap-3">
+      <Unavailable compact message={`Discussion threads cannot be shown: ${data.reason}.`} />
+      <div class="flex flex-wrap gap-2">
+        {data.declaredUrl && <Button href={data.declaredUrl} variant="primary" size="sm" rounded="full" external withExternalIcon>{ui.buttons.openDiscussion}</Button>}
+        <Button href={data.categoryUrl} variant="secondary" size="sm" rounded="full" external withExternalIcon>Browse collateral proposals</Button>
+      </div>
+    </div>
+  ) : !d ? (
+    <div class="flex flex-col gap-3">
+      <p class="ty-small text-[var(--color-gray-75)]">No discussion thread found for this collateral yet.</p>
+      <div>
+        <Button href={data.categoryUrl} variant="secondary" size="sm" rounded="full" external withExternalIcon>Start one in “Acceptable Collaterals”</Button>
+      </div>
+    </div>
+  ) : (
+    <div>
+      <div class="flex flex-col md:flex-row md:items-start justify-between gap-3">
+        <div class="min-w-0">
+          <a href={d.url} target="_blank" rel="noopener noreferrer" class="ty-title-3 font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">{d.title}</a>
+          <p class="ty-xs text-[var(--color-gray-75)] mt-1">
+            #{d.number} · {d.category} · opened {formatDate(d.createdAt)} by <span class="font-bold">{d.author ?? "ghost"}</span> · {d.commentCount} comments
+            {d.upvotes > 0 && <span> · ▲ {d.upvotes}</span>}
+            {d.matchedBy === "heuristic" && <span title="Matched by title; add links.discussion to the assessment to pin it"> · matched by title</span>}
+          </p>
+        </div>
+        <Button href={d.url} variant="primary" size="sm" rounded="full" external withExternalIcon>Reply on GitHub</Button>
+      </div>
+
+      <details class="mt-4 group" open={d.comments.length <= 3}>
+        <summary class="ty-small font-bold text-[var(--color-brand-deep-blue)] cursor-pointer select-none">Original post <span class="font-normal text-[var(--color-gray-75)] group-open:hidden">(show)</span></summary>
+        <div class="fc-prose gh-body mt-2 rounded-lg bg-[var(--color-gray-10)] p-4" set:html={d.html} />
+      </details>
+
+      {d.comments.length > 0 && (
+        <div class="mt-2">
+          <p class="fc-card-title mt-4">Comments</p>
+          <ul>{d.comments.map((c) => <Comment c={c} />)}</ul>
+          {d.commentCount > d.comments.length && (
+            <p class="ty-xs text-[var(--color-gray-75)] mt-4">Showing {d.comments.length} of {d.commentCount} — <a href={d.url} target="_blank" rel="noopener noreferrer" class="underline">read all on GitHub ↗</a></p>
+          )}
+        </div>
+      )}
+
+      {data.related.length > 0 && (
+        <div class="mt-6 border-t border-[var(--color-gray-20)] pt-4">
+          <p class="fc-card-title mb-2">Related threads</p>
+          <ul class="flex flex-col gap-1">
+            {data.related.map((r) => (
+              <li class="ty-small">
+                <a href={r.url} target="_blank" rel="noopener noreferrer" class="text-[var(--color-blue-39)] hover:underline">{r.title}</a>
+                <span class="text-[var(--color-gray-75)]"> · {r.commentCount} comments · {formatDate(r.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
+
+<style is:global>
+  /* GitHub-rendered HTML niceties */
+  .gh-body img { max-width: 100%; height: auto; }
+  .gh-body .task-list-item { list-style: none; }
+  .gh-body pre { white-space: pre-wrap; }
+</style>

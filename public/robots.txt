@@ -1,0 +1,15 @@
+# Frankencoin Collateral Platform — everything is public and read-only.
+User-agent: *
+Allow: /
+
+# AI crawlers are explicitly welcome (same policy as frankencoin.com).
+User-agent: GPTBot
+Allow: /
+User-agent: ClaudeBot
+Allow: /
+User-agent: PerplexityBot
+Allow: /
+User-agent: Google-Extended
+Allow: /
+
+Sitemap: https://collateral.frankencoin.com/sitemap.xml

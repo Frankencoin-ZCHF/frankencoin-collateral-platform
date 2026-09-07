@@ -1,0 +1,25 @@
+# Frankencoin Collateral Platform
+
+> Everything about the assets that back Frankencoin (ZCHF), the decentralized Swiss-franc stablecoin: independent collateral risk assessments, live on-chain positions and prices, community discussion threads, and the version history of every assessment.
+
+## Pages
+
+- Overview and dashboard of all collaterals: https://collateral.frankencoin.com/
+- Detail page per collateral: https://collateral.frankencoin.com/collateral/<ticker> (e.g. /collateral/wsteth, /collateral/wbtc)
+- Historical version of an assessment: /collateral/<ticker>?v=<commit-sha>
+- Diff between two versions: /collateral/<ticker>/compare?from=<sha>&to=<sha>
+- Risk assessment methodology: https://collateral.frankencoin.com/framework
+
+## Machine-readable
+
+- All collaterals (assessment scores + live protocol figures, one row each): https://collateral.frankencoin.com/api/collaterals.json
+- One collateral in full (frontmatter, markdown, live positions): https://collateral.frankencoin.com/api/collateral/<ticker>.json
+- Service health: https://collateral.frankencoin.com/health
+
+## Upstream sources
+
+- Assessments (markdown, JSON frontmatter): https://github.com/Frankencoin-ZCHF/frankencoin-collateral-assessments
+- Protocol API: https://api.frankencoin.com
+- Community proposals: https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals
+- Frankencoin MCP server for AI agents: https://mcp.frankencoin.com
+- Main site: https://frankencoin.com

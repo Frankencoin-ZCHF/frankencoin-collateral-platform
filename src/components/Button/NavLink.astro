@@ -1,0 +1,17 @@
+---
+/* Ported from frankencoin-site. */
+const { href, active = false, ...rest } = Astro.props;
+
+const base =
+  "rounded-[var(--radius-button-2)] px-[var(--spacing-s)] py-[var(--spacing-xs)] " +
+  "text-[var(--font-size-body-2)] leading-[var(--line-height-body-2)] " +
+  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-blue-50)]";
+
+const color = active
+  ? "text-[var(--color-brand-swiss)] font-bold"
+  : "text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)]";
+---
+
+<a href={href} class={`${base} ${color}`} aria-current={active ? "page" : undefined} {...rest}>
+  <slot />
+</a>

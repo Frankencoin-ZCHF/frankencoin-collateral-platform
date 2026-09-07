@@ -1,0 +1,32 @@
+---
+import ui from "@/content/ui.json";
+
+interface Props {
+  theme?: "light" | "dark";
+}
+
+const { theme = "light" } = Astro.props as Props;
+---
+
+<div class="grid grid-cols-5 gap-[var(--spacing-l)] items-center">
+  {
+    ui.nav.socials.map((s) => (
+      <a
+        href={s.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={s.name}
+        class="inline-flex items-center justify-center hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-blue-50)] rounded-[var(--radius-button)]"
+      >
+        <img
+          src={theme === "light" ? s.light_icon : s.dark_icon}
+          width={s.width}
+          height={s.height}
+          alt={s.name}
+          class="h-8 w-auto"
+          loading="lazy"
+        />
+      </a>
+    ))
+  }
+</div>

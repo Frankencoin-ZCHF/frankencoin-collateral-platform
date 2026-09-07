@@ -1,0 +1,46 @@
+---
+import type { RiskParametersData } from "./index";
+interface Props {
+  data: RiskParametersData;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="overflow-x-auto">
+  <table class="fc-table">
+    <thead>
+      <tr>
+        <th>Parameter</th>
+        <th class="fc-num">Assessed</th>
+        <th class="fc-num">On-chain (active positions)</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {
+        data.rows.map((r) => (
+          <tr>
+            <td>
+              <span class="font-bold text-[var(--color-brand-deep-blue)]">{r.label}</span>
+              <span class="block ty-2xs text-[var(--color-gray-60)]">{r.hint}</span>
+            </td>
+            <td class="fc-num">{r.assessed}</td>
+            <td class="fc-num">
+              {r.onchain}
+              {r.note && <span class="block ty-2xs text-[var(--color-gray-60)] font-normal">{r.note}</span>}
+            </td>
+            <td class="w-8 text-center">
+              {r.verdict === "ok" && <span title="Assessment and on-chain agree" class="text-emerald-600">●</span>}
+              {r.verdict === "diff" && <span title="Assessment and on-chain differ" class="text-amber-500">●</span>}
+            </td>
+          </tr>
+        ))
+      }
+    </tbody>
+  </table>
+</div>
+{
+  !data.hasLive && (
+    <p class="ty-2xs text-[var(--color-gray-60)] mt-3">No active on-chain positions for this collateral yet — the on-chain column fills in once a position is opened.</p>
+  )
+}

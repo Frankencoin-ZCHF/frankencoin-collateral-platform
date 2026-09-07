@@ -1,0 +1,100 @@
+{
+  "site": {
+    "name": "Frankencoin Collateral Platform",
+    "shortName": "Collaterals",
+    "title": "Frankencoin Collateral Platform",
+    "url": "https://collateral.frankencoin.com",
+    "description": "Every collateral accepted or assessed for minting Frankencoin (ZCHF): risk assessments, on-chain positions, live protocol data, version history and community discussion in one place.",
+    "image": "/images/og_image.webp",
+    "twitterHandle": "@frankencoinzchf",
+    "keywords": "Frankencoin, ZCHF, collateral, risk assessment, DeFi, Swiss franc stablecoin, minting, positions",
+    "author": "Frankencoin Association",
+    "locale": "en_US"
+  },
+  "nav": {
+    "brand": { "name": "Frankencoin", "href": "/" },
+    "links": [
+      { "label": "Collaterals", "href": "/" },
+      { "label": "Framework", "href": "/framework" },
+      { "label": "Discussions", "href": "https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals", "external": true },
+      { "label": "frankencoin.com", "href": "https://frankencoin.com", "external": true }
+    ],
+    "cta": { "label": "Launch App", "href": "https://app.frankencoin.com/" },
+    "socials": [
+      { "name": "Telegram", "href": "https://t.me/frankencoinzchf", "light_icon": "/images/Social-icons-1_1.svg", "dark_icon": "/images/Social-icons-1.svg", "width": 30, "height": 30 },
+      { "name": "X (Twitter)", "href": "https://x.com/frankencoinzchf", "light_icon": "/images/Social-icons_1.svg", "dark_icon": "/images/Social-icons.svg", "width": 30, "height": 30 },
+      { "name": "LinkedIn", "href": "https://www.linkedin.com/company/frankencoin/", "light_icon": "/images/Social-icons-2_1.svg", "dark_icon": "/images/Social-icons-2.svg", "width": 30, "height": 30 },
+      { "name": "GitHub", "href": "https://github.com/Frankencoin-ZCHF/", "light_icon": "/images/Social-icons-4_1.svg", "dark_icon": "/images/Social-icons-4.svg", "width": 51, "height": 32 },
+      { "name": "Docs (GitBook)", "href": "https://docs.frankencoin.com/", "light_icon": "/images/Gitbook_1.svg", "dark_icon": "/images/Gitbook.svg", "width": 30, "height": 30 }
+    ]
+  },
+  "footer": {
+    "columns": [
+      {
+        "title": "Collaterals",
+        "links": [
+          { "label": "Overview", "href": "/" },
+          { "label": "Risk framework", "href": "/framework" },
+          { "label": "Assessments repository", "href": "https://github.com/Frankencoin-ZCHF/frankencoin-collateral-assessments", "external": true },
+          { "label": "Propose a collateral", "href": "https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals", "external": true }
+        ]
+      },
+      {
+        "title": "Protocol",
+        "links": [
+          { "label": "frankencoin.com", "href": "https://frankencoin.com", "external": true },
+          { "label": "Web App", "href": "https://app.frankencoin.com", "external": true },
+          { "label": "Documentation", "href": "https://docs.frankencoin.com", "external": true },
+          { "label": "Governance / FPS", "href": "https://frankencoin.com/governance", "external": true }
+        ]
+      },
+      {
+        "title": "Data",
+        "links": [
+          { "label": "API", "href": "https://api.frankencoin.com", "external": true },
+          { "label": "MCP Server", "href": "https://mcp.frankencoin.com", "external": true },
+          { "label": "Ponder (GraphQL)", "href": "https://ponder.frankencoin.com", "external": true },
+          { "label": "DeFiLlama", "href": "https://defillama.com/protocol/frankencoin", "external": true },
+          { "label": "Dune Dashboard", "href": "https://dune.com/frankencoin", "external": true },
+          { "label": "JSON: all collaterals", "href": "/api/collaterals.json" }
+        ]
+      },
+      {
+        "title": "Community",
+        "links": [
+          { "label": "Discussion Forum", "href": "https://github.com/Frankencoin-ZCHF/Frankencoin/discussions", "external": true },
+          { "label": "Telegram", "href": "https://t.me/frankencoinzchf", "external": true },
+          { "label": "X (Twitter)", "href": "https://x.com/frankencoinzchf", "external": true },
+          { "label": "GitHub", "href": "https://github.com/Frankencoin-ZCHF", "external": true }
+        ]
+      }
+    ],
+    "copyright": "© {year} Frankencoin Association. All rights reserved.",
+    "disclaimer": "Assessments are the opinion of their authors and not financial advice. Live figures are read from public protocol endpoints and may lag the chain by a few minutes."
+  },
+  "buttons": {
+    "copy": "Copy",
+    "copied": "Copied!",
+    "loading": "Loading…",
+    "viewOnGitHub": "View on GitHub",
+    "openDiscussion": "Open discussion",
+    "compare": "Compare",
+    "exportCsv": "Export CSV",
+    "resetFilters": "Reset filters"
+  },
+  "labels": {
+    "unavailable": "Data currently unavailable",
+    "notAssessed": "No risk assessment yet",
+    "notLive": "Not used as collateral on-chain yet",
+    "draft": "Draft",
+    "published": "Published",
+    "deprecated": "Deprecated",
+    "liveOnly": "On-chain only",
+    "assessedOn": "Assessed on",
+    "author": "Author",
+    "version": "Version",
+    "latest": "Latest",
+    "viewingVersion": "You are viewing a historical version",
+    "backToLatest": "Back to latest"
+  }
+}

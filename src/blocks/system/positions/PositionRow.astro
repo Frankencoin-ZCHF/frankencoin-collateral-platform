@@ -1,0 +1,24 @@
+---
+import type { Position } from "@/types";
+import { formatCompact, formatDate, formatDuration, formatNumber, formatPercent, formatPrice, shortAddress } from "@/lib/numbers";
+interface Props {
+  p: Position;
+}
+const { p } = Astro.props as Props;
+---
+
+<tr>
+  <td>
+    <a href={p.url} target="_blank" rel="noopener noreferrer" class="font-mono ty-xs text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)]">{shortAddress(p.address, 6)}</a>
+    <span class="block ty-2xs text-[var(--color-gray-60)]">v{p.version}{p.isOriginal ? " · original" : " · clone"}</span>
+  </td>
+  <td><a href={`https://etherscan.io/address/${p.owner}`} target="_blank" rel="noopener noreferrer" class="font-mono ty-xs">{shortAddress(p.owner)}</a></td>
+  <td class="fc-num">{formatNumber(p.collateralBalance, p.collateralBalance < 10 ? 4 : 2)}</td>
+  <td class="fc-num">{formatCompact(p.minted)}</td>
+  <td class="fc-num">{p.collateralRatioPct === null ? "–" : formatPercent(p.collateralRatioPct, 0)}</td>
+  <td class="fc-num">{formatPrice(p.liquidationPriceZchf)}</td>
+  <td class="fc-num">{formatPercent(p.riskPremiumPct)}</td>
+  <td class="fc-num">{formatPercent(p.reserveContributionPct, 0)}</td>
+  <td class="fc-num">{formatDuration(p.challengePeriodSeconds)}</td>
+  <td class="whitespace-nowrap">{formatDate(p.expiresAt)}</td>
+</tr>

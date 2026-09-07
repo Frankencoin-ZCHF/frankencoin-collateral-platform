@@ -1,0 +1,75 @@
+---
+import Footer from "@/components/Layout/Footer.astro";
+import Header from "@/components/Layout/Header.astro";
+import SEO from "@/components/SEO.astro";
+import ui from "@/content/ui.json";
+import "@/styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  type?: "website" | "article";
+  noindex?: boolean;
+}
+
+const { title, description, image, type, noindex } = Astro.props;
+const { site } = ui;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="generator" content={Astro.generator} />
+    <meta name="theme-color" content="#0A2540" />
+
+    <SEO title={title} description={description} image={image} type={type} noindex={noindex} />
+
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+    <link rel="apple-touch-icon" sizes="256x256" href="/images/webclip.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": site.name,
+      "url": site.url,
+      "description": site.description,
+      "publisher": {
+        "@type": "Organization",
+        "name": "Frankencoin Association",
+        "url": "https://frankencoin.com",
+        "logo": new URL(site.image, site.url).href,
+        "sameAs": [
+          "https://x.com/frankencoinzchf",
+          "https://github.com/Frankencoin-ZCHF",
+          "https://t.me/frankencoinzchf"
+        ]
+      }
+    })} />
+
+    <slot name="head" />
+  </head>
+  <body
+    class="min-h-dvh flex flex-col w-full bg-[var(--color-white)] text-[var(--color-neutral-800)]"
+  >
+    <Header />
+
+    <main class="w-full flex-1 flex flex-col pt-[64px]">
+      <slot />
+    </main>
+
+    <Footer />
+
+    <!-- Alpine is bundled from node_modules (no CDN) so the CSP can stay on 'self'. -->
+    <script>
+      import Alpine from "alpinejs";
+      // @ts-ignore
+      window.Alpine = Alpine;
+      Alpine.start();
+    </script>
+  </body>
+</html>

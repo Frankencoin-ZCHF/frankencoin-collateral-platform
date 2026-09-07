@@ -1,0 +1,27 @@
+---
+/* Alpine-driven copy-to-clipboard (adapted from the site's Tooltip component). */
+import ui from "@/content/ui.json";
+
+interface Props {
+  value: string;
+  label?: string;
+  class?: string;
+}
+
+const { value, label = ui.buttons.copy, class: cls = "" } = Astro.props as Props;
+---
+
+<button
+  type="button"
+  x-data="{ copied: false }"
+  @click={`navigator.clipboard.writeText($el.dataset.value).then(() => { copied = true; setTimeout(() => copied = false, 1500) })`}
+  data-value={value}
+  class={`inline-flex items-center gap-1 rounded-[var(--radius-button-2)] px-2 py-0.5 ty-xs bg-[var(--color-neutral-100)] hover:bg-[var(--color-neutral-200)] text-[var(--color-neutral-650)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--color-blue-50)] ${cls}`}
+  :aria-label={`copied ? '${ui.buttons.copied}' : '${label}'`}
+>
+  <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+    <path d="M6 3h7a2 2 0 0 1 2 2v8H8a2 2 0 0 1-2-2V3Z" />
+    <path d="M4 7h7a2 2 0 0 1 2 2v6H6a2 2 0 0 1-2-2V7Z" />
+  </svg>
+  <span x-text={`copied ? '${ui.buttons.copied}' : '${label}'`}>{label}</span>
+</button>

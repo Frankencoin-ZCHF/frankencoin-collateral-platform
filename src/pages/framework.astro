@@ -1,0 +1,62 @@
+---
+import Base from "@/layouts/Base.astro";
+import Section from "@/components/Layout/Section.astro";
+import Button from "@/components/Button/Button.astro";
+import Unavailable from "@/components/Unavailable.astro";
+import * as assessments from "@/services/assessments";
+import { renderMarkdown } from "@/lib/markdown";
+import { describeForLog } from "@/lib/errors";
+import { FRAMEWORK_PATH } from "@/lib/constants";
+
+export const prerender = false;
+
+let html: string | null = null;
+let headings: { id: string; text: string; level: number }[] = [];
+try {
+  const md = await assessments.frameworkMarkdown();
+  const r = renderMarkdown(md);
+  html = r.html;
+  headings = r.headings.filter((h) => h.level <= 3);
+} catch (e) {
+  console.error(`[framework] ${describeForLog(e)}`);
+}
+
+Astro.response.headers.set("Cache-Control", "public, max-age=300, s-maxage=300");
+---
+
+<Base title="Collateral Risk Framework" description="How Frankencoin collateral risk assessments are produced: market risk, tail risks, retained reserve and risk premium.">
+  <Section variant="accent" pad="xs" width="wide">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div>
+        <p class="ty-subtitle">METHODOLOGY</p>
+        <h1 class="ty-large-title">Collateral Risk Framework</h1>
+        <p class="ty-body-2 text-[var(--color-neutral-650)] mt-2 max-w-3xl">
+          The reference document every assessment follows. Rendered live from the assessments repository.
+        </p>
+      </div>
+      <Button href={assessments.fileUrl(FRAMEWORK_PATH)} variant="secondary" size="sm" external withExternalIcon>View source on GitHub</Button>
+    </div>
+  </Section>
+
+  <Section pad="xs" width="wide">
+    {
+      html ? (
+        <div class="flex flex-col lg:flex-row gap-10">
+          <aside class="lg:w-64 shrink-0 lg:sticky lg:top-24 self-start">
+            <p class="fc-card-title mb-3">Contents</p>
+            <nav class="flex flex-col gap-1">
+              {headings.map((h) => (
+                <a href={`#${h.id}`} class={`ty-small text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)] ${h.level === 3 ? "pl-4" : h.level === 1 ? "font-bold" : ""}`}>
+                  {h.text}
+                </a>
+              ))}
+            </nav>
+          </aside>
+          <article class="fc-prose max-w-3xl min-w-0" set:html={html} />
+        </div>
+      ) : (
+        <Unavailable message="The framework document could not be loaded from GitHub." />
+      )
+    }
+  </Section>
+</Base>

@@ -1,0 +1,33 @@
+---
+import type { DocumentsSpec } from "./index";
+interface Props {
+  data: DocumentsSpec;
+}
+const { data } = Astro.props as Props;
+const ICON: Record<string, string> = { pdf: "📄", audit: "🛡️", legal: "⚖️", report: "📊", code: "💻", web: "🔗", other: "🔗" };
+const guessKind = (url: string) => (/\.pdf($|\?)/i.test(url) ? "pdf" : "web");
+---
+
+<div class="fc-card p-4 my-4 not-prose">
+  <p class="fc-card-title mb-1">{data.title ?? (data.type === "links" ? "Links" : "Documents")}</p>
+  {data.description && <p class="ty-small text-[var(--color-gray-75)] mb-2">{data.description}</p>}
+  <ul class="divide-y divide-[var(--color-gray-20)]">
+    {
+      data.items.map((it) => (
+        <li class="py-2 flex items-start gap-3">
+          <span class="text-base leading-6" aria-hidden="true">{ICON[it.kind ?? guessKind(it.url)] ?? "🔗"}</span>
+          <div class="min-w-0">
+            <a href={it.url} target="_blank" rel="noopener noreferrer" class="ty-body-2 font-bold text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)] break-words">{it.label}</a>
+            {(it.description || it.date) && (
+              <p class="ty-xs text-[var(--color-gray-75)]">
+                {it.date && <span>{it.date}</span>}
+                {it.date && it.description && <span> · </span>}
+                {it.description && <span>{it.description}</span>}
+              </p>
+            )}
+          </div>
+        </li>
+      ))
+    }
+  </ul>
+</div>

@@ -1,0 +1,165 @@
+---
+import Base from "@/layouts/Base.astro";
+import Section from "@/components/Layout/Section.astro";
+import StatsContainer from "@/components/StatsContainer/StatsContainer.astro";
+import CollateralTable from "@/components/CollateralTable.astro";
+import Unavailable from "@/components/Unavailable.astro";
+import Button from "@/components/Button/Button.astro";
+import ui from "@/content/ui.json";
+import * as collaterals from "@/services/collaterals";
+import { toRow } from "@/lib/rows";
+import { formatCompact, formatDate, formatNumber } from "@/lib/numbers";
+import { describeForLog } from "@/lib/errors";
+
+export const prerender = false;
+
+let set: Awaited<ReturnType<typeof collaterals.all>> | null = null;
+try {
+  set = await collaterals.all();
+} catch (e) {
+  console.error(`[index] ${describeForLog(e)}`);
+}
+
+const records = set?.records ?? [];
+const rows = records.map(toRow);
+const summary = collaterals.summarize(records);
+
+const kpis = [
+  { label: "Assessed collaterals", value: String(summary.assessed), sub: `${summary.published} published · ${summary.draft} draft`, href: "#collaterals" },
+  { label: "Live collaterals", value: String(summary.liveCollaterals), sub: "with active positions", href: "#collaterals" },
+  { label: "Minted ZCHF", value: formatCompact(summary.totalMintedZchf), sub: "against these collaterals" },
+  { label: "Collateral value", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "locked in active positions" },
+  { label: "Active positions", value: formatNumber(summary.activePositions, 0), href: "https://app.frankencoin.com/monitoring" },
+  { label: "Active challenges", value: formatNumber(summary.activeChallenges, 0), href: "https://app.frankencoin.com/challenges" },
+];
+
+// Chart payloads
+const withMint = rows.filter((r) => (r.mintedZchf ?? 0) > 0).sort((a, b) => (b.mintedZchf ?? 0) - (a.mintedZchf ?? 0));
+const mintedSeries = { labels: withMint.slice(0, 14).map((r) => r.ticker), values: withMint.slice(0, 14).map((r) => r.mintedZchf ?? 0), unit: "ZCHF", name: "Minted ZCHF" };
+const valueRows = rows.filter((r) => (r.collateralValueChf ?? 0) > 0).sort((a, b) => (b.collateralValueChf ?? 0) - (a.collateralValueChf ?? 0));
+const top = valueRows.slice(0, 8);
+const rest = valueRows.slice(8).reduce((n, r) => n + (r.collateralValueChf ?? 0), 0);
+const valueSeries = {
+  labels: [...top.map((r) => r.ticker), ...(rest > 0 ? ["Other"] : [])],
+  values: [...top.map((r) => r.collateralValueChf ?? 0), ...(rest > 0 ? [rest] : [])],
+  unit: "CHF",
+};
+const premiumRows = rows.filter((r) => r.riskPremiumAvgPct != null && (r.positionsActive ?? 0) > 0).sort((a, b) => (b.riskPremiumAvgPct ?? 0) - (a.riskPremiumAvgPct ?? 0));
+const premiumSeries = {
+  labels: premiumRows.map((r) => r.ticker),
+  values: premiumRows.map((r) => r.riskPremiumAvgPct ?? 0),
+  series: [
+    { name: "On-chain risk premium", values: premiumRows.map((r) => r.riskPremiumAvgPct ?? 0) },
+    { name: "Assessed target premium", values: premiumRows.map((r) => r.targetRatePct ?? 0) },
+  ],
+  unit: "%",
+};
+
+const updated = set?.protocolFetchedAt ? formatDate(set.protocolFetchedAt) : null;
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
+---
+
+<Base>
+  <Section variant="accent" pad="xs" width="wide" id="top">
+    <div class="flex flex-col gap-6">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div class="max-w-3xl">
+          <p class="ty-subtitle">FRANKENCOIN · COLLATERAL PLATFORM</p>
+          <h1 class="ty-large-title">Collaterals</h1>
+          <p class="ty-body-1 text-[var(--color-neutral-650)] mt-2">
+            Every asset that backs Frankencoin: independent risk assessments, live on-chain positions, version history and community discussion — in one place.
+          </p>
+        </div>
+        <div class="flex gap-3 shrink-0">
+          <Button href="/framework" variant="secondary" size="sm">Risk framework</Button>
+          <Button href={ui.nav.links[2]!.href} variant="primary" rounded="full" size="sm" external withExternalIcon>Propose a collateral</Button>
+        </div>
+      </div>
+
+      {set?.warnings.map((w) => <Unavailable message={w} compact />)}
+      {!set && <Unavailable message="Neither the assessments repository nor the protocol API could be reached. Try again in a minute." />}
+
+      <StatsContainer options={kpis} cols={6} />
+    </div>
+  </Section>
+
+  {
+    rows.length > 0 && (
+      <Section pad="xxs" width="wide" id="dashboard">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div class="fc-card p-4">
+            <p class="fc-card-title mb-2">Minted ZCHF per collateral</p>
+            <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-64" />
+          </div>
+          <div class="fc-card p-4">
+            <p class="fc-card-title mb-2">Collateral value share (CHF)</p>
+            <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-64" />
+          </div>
+          <div class="fc-card p-4">
+            <p class="fc-card-title mb-2">Risk premium: on-chain vs assessed</p>
+            <div data-chart="bar" data-series={JSON.stringify(premiumSeries)} class="h-64" />
+          </div>
+        </div>
+      </Section>
+    )
+  }
+
+  <Section pad="xs" width="wide" id="collaterals">
+    <div class="flex flex-col gap-4">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div>
+          <h2 class="ty-title-1">All collaterals</h2>
+          <p class="ty-small text-[var(--color-gray-75)]">
+            <span id="grid-count">{rows.length}</span> shown{updated && <> · protocol data as of {updated}</>}{set?.assessmentsHead && <> · assessments @ <a class="underline" href={`https://github.com/${set.assessmentsHead.url.split("/").slice(3, 5).join("/")}/commit/${set.assessmentsHead.sha}`} target="_blank" rel="noopener noreferrer">{set.assessmentsHead.shortSha}</a></>}
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="grid-search" type="search" placeholder="Search…" aria-label="Search collaterals" class="h-9 rounded-full border border-[var(--color-gray-30)] px-4 ty-small w-48 focus:outline-none focus:border-[var(--color-brand-swiss)]" />
+          <details class="relative">
+            <summary class="list-none h-9 inline-flex items-center px-4 rounded-full border border-[var(--color-gray-30)] ty-small cursor-pointer hover:bg-[var(--color-gray-10)]">Columns</summary>
+            <div id="grid-columns-menu" class="absolute right-0 z-30 mt-1 max-h-80 overflow-y-auto rounded-lg border border-[var(--color-gray-20)] bg-white shadow-lg py-1 min-w-52"></div>
+          </details>
+          <button id="grid-export" type="button" class="h-9 inline-flex items-center px-4 rounded-full border border-[var(--color-gray-30)] ty-small hover:bg-[var(--color-gray-10)]">{ui.buttons.exportCsv}</button>
+          <button id="grid-reset" type="button" class="h-9 inline-flex items-center px-4 rounded-full ty-small text-[var(--color-gray-75)] hover:text-[var(--color-brand-deep-blue)]">{ui.buttons.resetFilters}</button>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap gap-2 items-center" role="group" aria-label="Filters">
+        <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] mr-1">Assessment</span>
+        {
+          [
+            ["status:all", "All"],
+            ["status:published", "Published"],
+            ["status:draft", "Draft"],
+            ["status:deprecated", "Deprecated"],
+            ["status:none", "On-chain only"],
+          ].map(([chip, label]) => (
+            <button type="button" data-chip={chip} aria-pressed={chip === "status:all"} class="chip">{label}</button>
+          ))
+        }
+        <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] ml-3 mr-1">Free float</span>
+        {
+          [
+            ["class:all", "Any"],
+            ["class:strong", "Strong"],
+            ["class:sufficient", "Sufficient"],
+            ["class:insufficient", "Insufficient"],
+          ].map(([chip, label]) => (
+            <button type="button" data-chip={chip} aria-pressed={chip === "class:all"} class="chip">{label}</button>
+          ))
+        }
+        <button type="button" data-chip="live:toggle" aria-pressed="false" class="chip ml-3">Active positions only</button>
+      </div>
+
+      <script is:inline type="application/json" id="grid-data" set:html={JSON.stringify(rows)} />
+      <div id="collateral-grid" hidden class="w-full"></div>
+      <CollateralTable rows={rows} />
+      <noscript><p class="ty-xs text-[var(--color-gray-75)]">Enable JavaScript for sorting, filtering and CSV export.</p></noscript>
+    </div>
+  </Section>
+</Base>
+
+<script>
+  import "@/scripts/charts";
+  import "@/scripts/collateral-grid";
+</script>

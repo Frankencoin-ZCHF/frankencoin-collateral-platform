@@ -1,0 +1,60 @@
+---
+import type { RiskSummaryData } from "./index";
+import Pill from "@/components/Pill.astro";
+import { formatDate, formatPercent } from "@/lib/numbers";
+interface Props {
+  data: RiskSummaryData;
+}
+const { data } = Astro.props as Props;
+const d = data.data;
+const worst = [...d.tailRisks].filter((t) => t.compensationPct).sort((a, b) => (b.compensationPct ?? 0) - (a.compensationPct ?? 0)).slice(0, 3);
+---
+
+<div class="fc-kv !grid-cols-2">
+  <div>
+    <p class="fc-kv-label">Free float / liquidity</p>
+    <p class="mt-1"><Pill value={d.scores.freeFloat} /></p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Public information</p>
+    <p class="mt-1"><Pill value={d.scores.publicInformation} /></p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Market risk</p>
+    <p class="fc-kv-value">{formatPercent(d.scores.marketRiskPct)}</p>
+    <p class="fc-kv-unit">MDD / 99%-VaR over 2× auction</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Tail-risk compensation</p>
+    <p class="fc-kv-value">{formatPercent(d.totalCompensationPct)}</p>
+    <p class="fc-kv-unit">Σ of all tail-risk premiums p.a.</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Retained reserve</p>
+    <p class="fc-kv-value">{formatPercent(d.params.retainedReservePct, 1)}</p>
+  </div>
+  <div>
+    <p class="fc-kv-label">Target risk premium</p>
+    <p class="fc-kv-value">{formatPercent(d.params.targetInterestRatePct)}</p>
+  </div>
+</div>
+
+{
+  worst.length > 0 && (
+    <div class="mt-4">
+      <p class="fc-kv-label mb-1">Main residual risks</p>
+      <ul class="flex flex-col gap-1">
+        {worst.map((t) => (
+          <li class="ty-small flex items-baseline justify-between gap-2">
+            <span class="truncate">{t.name}</span>
+            <span class="tabular-nums text-[var(--color-gray-75)] shrink-0">{formatPercent(t.compensationPct)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+<p class="ty-2xs text-[var(--color-gray-60)] mt-4">
+  Assessed {formatDate(d.assessmentDate)} by {d.author} · <a href={data.sourceUrl} target="_blank" rel="noopener noreferrer" class="underline">source ↗</a>
+</p>

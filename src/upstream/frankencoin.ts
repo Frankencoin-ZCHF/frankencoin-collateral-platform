@@ -1,0 +1,97 @@
+/**
+ * api.frankencoin.com REST client. No auth. Cached at this boundary so one
+ * /positions/list fetch serves every page in the TTL window.
+ */
+
+import { getOrLoad, TTL } from "@/lib/cache";
+import { API_BASE } from "@/lib/constants";
+import { fetchJson } from "./client";
+
+const SOURCE = "frankencoin-api";
+
+const TTLS: Record<string, { ttl: number; swr: number }> = {
+  "/ecosystem/collateral/list": { ttl: TTL.HOUR, swr: 6 * TTL.HOUR },
+};
+const DEFAULT_TTL = { ttl: TTL.MINUTE, swr: 5 * TTL.MINUTE };
+
+export function apiFetch<T = unknown>(path: string): Promise<T> {
+  const { ttl, swr } = TTLS[path] ?? DEFAULT_TTL;
+  return getOrLoad(`fc:${path}`, ttl, () => fetchJson<T>(`${API_BASE}${path}`, { source: SOURCE }), { swrMs: swr });
+}
+
+// ── Response shapes (only the fields we use) ────────────────────────────────
+
+export interface ApiCollateral {
+  chainId: number;
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+}
+
+export interface ApiPrice {
+  chainId: number;
+  address: string;
+  name: string;
+  symbol: string;
+  decimals: number;
+  price: { chf?: number; usd?: number } | null;
+  source: string | null;
+  timestamp: number | null;
+}
+
+export interface ApiPosition {
+  version: 1 | 2;
+  position: string;
+  owner: string;
+  zchf: string;
+  collateral: string;
+  price: string;
+  created: number;
+  isOriginal: boolean;
+  isClone: boolean;
+  denied: boolean;
+  denyDate: number;
+  closed: boolean;
+  original: string;
+  minimumCollateral: string;
+  riskPremiumPPM?: number;
+  annualInterestPPM?: number;
+  reserveContribution: number;
+  start: number;
+  cooldown: number;
+  expiration: number;
+  challengePeriod: number;
+  collateralName: string;
+  collateralSymbol: string;
+  collateralDecimals: number;
+  collateralBalance: string;
+  limitForClones: string;
+  availableForClones: string;
+  availableForPosition?: string;
+  availableForMinting?: string;
+  minted: string;
+}
+
+export interface ApiChallenge {
+  id?: string;
+  position: string;
+  number: string;
+  txHash: string;
+  challenger: string;
+  start: string;
+  created: string;
+  duration: string;
+  size: string;
+  liqPrice: string;
+  bids: string;
+  filledSize: string;
+  acquiredCollateral: string;
+  status: string;
+  version: number;
+}
+
+export const collateralList = () => apiFetch<{ num: number; list: ApiCollateral[] }>("/ecosystem/collateral/list");
+export const priceList = () => apiFetch<ApiPrice[]>("/prices/list");
+export const positionList = () => apiFetch<{ num: number; list: ApiPosition[] }>("/positions/list");
+export const challengeList = () => apiFetch<{ num: number; list: ApiChallenge[] }>("/challenges/list");

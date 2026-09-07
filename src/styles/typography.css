@@ -1,0 +1,225 @@
+/* typography.css (importado en global.css) */
+@layer components {
+  /* Display & Titles */
+  .ty-display {
+    font-family: var(--font-sans);
+    font-size: clamp(
+      var(--font-size-display-mobile),
+      6vw,
+      var(--font-size-display)
+    );
+    line-height: clamp(
+      var(--line-height-display-mobile),
+      6vw,
+      var(--line-height-display)
+    );
+    font-weight: 1000;
+  }
+
+  .ty-display-mobile {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-display-mobile);
+    line-height: var(--line-height-display-mobile);
+    font-weight: 900;
+  }
+
+  .ty-large-title {
+    font-family: var(--font-sans);
+    font-size: clamp(
+      var(--font-size-large-title-mobile),
+      4.5vw,
+      var(--font-size-large-title)
+    );
+    line-height: clamp(
+      var(--line-height-large-title-mobile),
+      4.5vw,
+      var(--line-height-large-title)
+    );
+    font-weight: 1000;
+    color: var(--color-brand-deep-blue);
+  }
+
+  .ty-large-title-mobile {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-large-title-mobile);
+    line-height: var(--line-height-large-title-mobile);
+    font-weight: 800;
+  }
+
+  .ty-title-1 {
+    color: var(--color-brand-deep-blue);
+    font-family: var(--font-sans);
+    font-size: var(--font-size-title-1);
+    line-height: var(--line-height-title-1);
+    font-weight: 700;
+  }
+
+  .ty-title-1-mobile {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-title-1-mobile);
+    line-height: var(--line-height-title-1-mobile);
+    font-weight: 700;
+  }
+
+  .ty-title-2 {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-title-2);
+    font-weight: 600;
+  }
+
+  .ty-title-3 {
+    font-family: var(--font-sans);
+    font-size: var(--font-size--title-3-desktop);
+    font-weight: 400;
+  }
+
+  .ty-subtitle {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-subtitle);
+    line-height: var(--line-height-subtitle);
+    font-weight: 500;
+    color: var(--color-gray-75);
+  }
+
+  /* Body Text */
+  .ty-body-1 {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body-1);
+    line-height: var(--line-height-body-1);
+    font-weight: 400;
+    @media (max-width: 768px) {
+      font-size: var(--font-size-body-1-mobile);
+      line-height: var(--line-height-body-1-mobile);
+    }
+  }
+
+  .ty-body-1-mobile {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body-1-mobile);
+    line-height: var(--line-height-body-1-mobile);
+    font-weight: 400;
+    color: var(--color-brand-deep-blue);
+  }
+
+  .ty-body-2 {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body-2);
+    line-height: var(--line-height-body-2);
+    font-weight: 400;
+    @media (max-width: 768px) {
+      font-size: var(--font-size-body-2-mobile);
+      line-height: var(--line-height-body-2-mobile);
+    }
+  }
+
+  .ty-body-3 {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body-3);
+    line-height: var(--line-height-body-3);
+    font-weight: 400;
+  }
+  /* Big Text */
+
+  .ty-big {
+    font-family: var(--font-sans);
+    font-size: var(--font-size--title-1-desktop);
+    font-weight: 1000;
+  }
+  .ty-big-2 {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-title-2-mobile);
+    font-weight: 1000;
+  }
+
+  @media (min-width: 768px) {
+    .ty-big-2 {
+      font-size: var(--font-size--title-2-desktop);
+    }
+  }
+  .ty-big-3 {
+    font-family: var(--font-sans);
+    font-size: clamp(
+      var(--font-size-title-3),
+      3vw,
+      var(--font-size--title-3-desktop)
+    );
+    font-weight: 1000;
+  }
+
+  /* Small Text */
+  .ty-small {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-sm-stronger);
+    font-weight: 400;
+  }
+
+  .ty-xs {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-xs);
+    font-weight: 400;
+  }
+
+  .ty-2xs {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-2xs);
+    font-weight: 400;
+  }
+
+  /* Weight Modifiers */
+  .ty-light {
+    font-weight: 300;
+  }
+  .ty-regular {
+    font-weight: 400;
+  }
+  .ty-medium {
+    font-weight: 500;
+  }
+  .ty-semibold {
+    font-weight: 600;
+  }
+  .ty-bold {
+    font-weight: 700;
+  }
+  .ty-extrabold {
+    font-weight: 800;
+  }
+  .ty-semiblack {
+    font-weight: 900;
+  }
+  .ty-black {
+    font-weight: 1000;
+  }
+
+  /* Color Modifiers */
+  .ty-primary {
+    color: var(--color-brand-deep-blue);
+  }
+  .ty-secondary {
+    color: var(--color-brand-titan-gray);
+  }
+  .ty-muted {
+    color: var(--color-neutral-500);
+  }
+  .ty-white {
+    color: var(--color-white);
+  }
+  .ty-brand {
+    color: var(--color-brand-swiss);
+  }
+
+  /* Legacy Classes */
+  .ty-title {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-title-1);
+    line-height: var(--line-height-title-1);
+    font-weight: 900;
+  }
+
+  .ty-paragraph {
+    font-family: var(--font-sans);
+    font-size: var(--font-size-body-2);
+    line-height: var(--line-height-body-2);
+    font-weight: 400;
+  }
+}

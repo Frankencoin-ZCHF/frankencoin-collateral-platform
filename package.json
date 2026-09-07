@@ -1,0 +1,43 @@
+{
+  "name": "frankencoin-collateral-platform",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Frankencoin Collateral Platform — collateral.frankencoin.com",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "start": "node ./dist/server/entry.mjs",
+    "astro": "astro",
+    "check": "astro check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "docs:blocks": "node scripts/gen-block-docs.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@astrojs/node": "^9",
+    "@tailwindcss/vite": "^4.3.3",
+    "ag-grid-community": "^36.1.0",
+    "alpinejs": "^3.17.1",
+    "astro": "^5",
+    "diff": "^9.0.0",
+    "diff2html": "^3.4.56",
+    "echarts": "^6.1.0",
+    "isomorphic-dompurify": "^4.1.0",
+    "marked": "^18.0.11",
+    "tailwindcss": "^4.3.3",
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/alpinejs": "^3.13.11",
+    "@types/node": "^26.4.1",
+    "typescript": "^5",
+    "vitest": "^5.0.0"
+  }
+}

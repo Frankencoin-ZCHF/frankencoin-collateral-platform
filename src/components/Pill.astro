@@ -1,0 +1,31 @@
+---
+/* Classification / status pill. `kind` selects the colour; defaults to the value itself. */
+interface Props {
+  value: string | null | undefined;
+  kind?: string | null;
+  class?: string;
+}
+const { value, kind, class: cls = "" } = Astro.props as Props;
+const key = (kind ?? value ?? "").toLowerCase();
+const COLOR: Record<string, string> = {
+  strong: "fc-pill-strong",
+  sufficient: "fc-pill-sufficient",
+  insufficient: "fc-pill-insufficient",
+  draft: "fc-pill-draft",
+  published: "fc-pill-published",
+  deprecated: "fc-pill-deprecated",
+  none: "fc-pill-live",
+  live: "fc-pill-live",
+  brand: "fc-pill-brand",
+  negligible: "fc-pill-strong",
+  "very low": "fc-pill-strong",
+  low: "fc-pill-sufficient",
+  medium: "fc-pill-sufficient",
+  high: "fc-pill-insufficient",
+  moderate: "fc-pill-sufficient",
+  severe: "fc-pill-insufficient",
+  critical: "fc-pill-insufficient",
+};
+---
+
+{value ? <span class={`fc-pill ${COLOR[key] ?? "fc-pill-neutral"} ${cls}`}>{value}</span> : <span class="text-[var(--color-gray-60)]">–</span>}

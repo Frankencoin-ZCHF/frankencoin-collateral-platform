@@ -1,0 +1,39 @@
+---
+import SocialLinksBar from "@/components/SocialLinksBar.astro";
+import ui from "@/content/ui.json";
+
+const { footer } = ui;
+const year = new Date().getFullYear();
+const copyrightText = footer.copyright.replace("{year}", year.toString());
+---
+
+<footer class="w-full bottom-0 bg-[var(--color-brand-anthracite)] border-t border-[var(--color-neutral-700)]">
+  <div class="mx-auto max-w-6xl px-[var(--spacing-l)] py-12">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+      {
+        footer.columns.map((column) => (
+          <div class="flex flex-col gap-4">
+            <h3 class="text-white font-semibold">{column.title}</h3>
+            <nav class="flex flex-col gap-3">
+              {column.links.map((link) => (
+                <a
+                  href={link.href}
+                  {...(link.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  class="text-white ty-small transition-opacity hover:opacity-70"
+                >
+                  {link.label}
+                </a>
+              ))}
+            </nav>
+          </div>
+        ))
+      }
+    </div>
+
+    <div class="flex flex-col items-center gap-6 pt-8 border-t border-[var(--color-neutral-700)]">
+      <SocialLinksBar theme="light" />
+      <p class="text-[var(--color-neutral-400)] ty-xs text-center max-w-2xl">{footer.disclaimer}</p>
+      <p class="text-[var(--color-neutral-400)] ty-xs">{copyrightText}</p>
+    </div>
+  </div>
+</footer>

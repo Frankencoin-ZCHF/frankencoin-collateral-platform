@@ -1,0 +1,12 @@
+---
+import type { ContentBlockResult } from "@/blocks/types";
+import ContentBlock from "@/blocks/content/ContentBlock.astro";
+interface Props {
+  data: ContentBlockResult[];
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-x-6 [&>*]:my-0">
+  {data.map((r) => <ContentBlock result={r} />)}
+</div>

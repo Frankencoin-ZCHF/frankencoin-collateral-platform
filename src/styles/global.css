@@ -1,0 +1,118 @@
+@import "tailwindcss";
+@import "./tokens.css";
+@import "./fonts.css";
+@import "./typography.css";
+
+@theme {
+  --breakpoint-xs: 480px;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    scroll-behavior: smooth;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  a,
+  button {
+    -webkit-tap-highlight-color: rgba(240, 235, 235, 0.1);
+    touch-action: manipulation;
+  }
+  button {
+    cursor: pointer;
+  }
+  /* Alpine: hide x-cloak elements until Alpine has initialised */
+  [x-cloak] {
+    display: none !important;
+  }
+}
+
+@layer components {
+  /* Card surface used by every block on the detail page */
+  .fc-card {
+    @apply bg-white border border-[var(--color-gray-20)] rounded-xl;
+  }
+  .fc-card-title {
+    @apply tracking-wider uppercase text-[var(--color-gray-75)];
+    font-size: var(--font-size-xs);
+  }
+  /* Small key/value grid used in KPI blocks */
+  .fc-kv {
+    @apply grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
+  }
+  .fc-kv-label {
+    @apply tracking-wider uppercase text-[var(--color-gray-75)];
+    font-size: var(--font-size-xs);
+  }
+  .fc-kv-value {
+    @apply text-[var(--color-brand-deep-blue)] break-words;
+    font-size: clamp(var(--font-size-title-3), 3vw, var(--font-size--title-3-desktop));
+    font-weight: 900;
+    line-height: 1.3;
+  }
+  .fc-kv-unit {
+    @apply text-[var(--color-gray-75)];
+    font-size: var(--font-size-xs);
+  }
+  /* Pills for classifications / statuses */
+  .fc-pill {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold uppercase tracking-wide whitespace-nowrap;
+    font-size: var(--font-size-xs);
+  }
+  .fc-pill-strong { @apply bg-emerald-100 text-emerald-800; }
+  .fc-pill-sufficient { @apply bg-amber-100 text-amber-800; }
+  .fc-pill-insufficient { @apply bg-red-100 text-red-800; }
+  .fc-pill-neutral { @apply bg-[var(--color-neutral-200)] text-[var(--color-neutral-650)]; }
+  .fc-pill-draft { @apply bg-amber-100 text-amber-800; }
+  .fc-pill-published { @apply bg-emerald-100 text-emerald-800; }
+  .fc-pill-deprecated { @apply bg-[var(--color-neutral-300)] text-[var(--color-neutral-650)]; }
+  .fc-pill-live { @apply bg-blue-100 text-blue-800; }
+  .fc-pill-brand { @apply bg-[var(--color-brand-deep-blue)] text-white; }
+
+  /* Rendered markdown (assessment narrative, framework page, discussions) */
+  .fc-prose {
+    @apply text-[var(--color-neutral-700)];
+    font-size: var(--font-size-body-2);
+    line-height: var(--line-height-body-2);
+  }
+  .fc-prose h1 { @apply mt-8 mb-3 font-bold text-[var(--color-brand-deep-blue)]; font-size: var(--font-size-title-1); line-height: var(--line-height-title-1); }
+  .fc-prose h2 { @apply text-[var(--color-brand-deep-blue)] mt-8 mb-3 font-semibold; font-size: var(--font-size-title-2); line-height: 1.25; }
+  .fc-prose h3 { @apply font-bold text-[var(--color-brand-deep-blue)] mt-6 mb-2; font-size: var(--font-size--title-3-desktop); line-height: 1.3; }
+  .fc-prose h4 { @apply font-bold mt-4 mb-1; }
+  .fc-prose p { @apply my-3; }
+  .fc-prose ul { @apply list-disc pl-6 my-3; }
+  .fc-prose ol { @apply list-decimal pl-6 my-3; }
+  .fc-prose li { @apply my-1; }
+  .fc-prose a { @apply text-[var(--color-blue-39)] underline hover:no-underline break-words; }
+  .fc-prose code { @apply font-mono text-[0.9em] bg-[var(--color-neutral-100)] px-1 py-0.5 rounded; }
+  .fc-prose pre { @apply bg-[var(--color-neutral-100)] rounded-lg p-4 overflow-x-auto my-4 text-sm; }
+  .fc-prose pre code { @apply bg-transparent p-0; }
+  .fc-prose blockquote { @apply border-l-4 border-[var(--color-gray-30)] pl-4 italic text-[var(--color-gray-75)] my-4; }
+  .fc-prose table { @apply w-full text-sm my-4 border-collapse; }
+  .fc-prose th { @apply text-left uppercase tracking-wider text-[var(--color-gray-75)] border-b border-[var(--color-gray-20)] py-2 pr-4; font-size: var(--font-size-xs); }
+  .fc-prose td { @apply border-b border-[var(--color-gray-20)] py-2 pr-4 align-top; }
+  .fc-prose hr { @apply border-[var(--color-gray-20)] my-6; }
+  .fc-prose img { @apply max-w-full rounded-lg; }
+
+  /* Plain data tables (SSR fallback + small tables in blocks) */
+  .fc-table { @apply w-full text-sm border-collapse; }
+  .fc-table th { @apply text-left uppercase tracking-wider text-[var(--color-gray-75)] border-b border-[var(--color-gray-20)] py-2 px-3 whitespace-nowrap; font-size: var(--font-size-xs); }
+  .fc-table td { @apply border-b border-[var(--color-gray-20)] py-2 px-3 align-top; }
+  .fc-table tr:hover td { @apply bg-[var(--color-gray-10)]; }
+  .fc-num { @apply text-right tabular-nums whitespace-nowrap; }
+}
+
+@layer components {
+  /* Filter chips on the overview */
+  .chip {
+    @apply h-8 inline-flex items-center px-3 rounded-full border border-[var(--color-gray-30)] font-bold uppercase tracking-wide text-[var(--color-brand-deep-blue)] bg-white hover:border-[var(--color-brand-deep-blue)] transition-colors;
+    font-size: var(--font-size-xs);
+  }
+  .chip[aria-pressed="true"] {
+    @apply bg-[var(--color-brand-deep-blue)] text-white border-[var(--color-brand-deep-blue)];
+  }
+}

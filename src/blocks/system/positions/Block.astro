@@ -1,0 +1,43 @@
+---
+import type { PositionsData } from "./index";
+import PositionRow from "./PositionRow.astro";
+interface Props {
+  data: PositionsData;
+}
+const { data } = Astro.props as Props;
+---
+
+<div class="overflow-x-auto">
+  <table class="fc-table">
+    <thead>
+      <tr>
+        <th>Position</th>
+        <th>Owner</th>
+        <th class="fc-num">{data.symbol}</th>
+        <th class="fc-num">Minted ZCHF</th>
+        <th class="fc-num">Coll. ratio</th>
+        <th class="fc-num">Liq. price</th>
+        <th class="fc-num">Premium</th>
+        <th class="fc-num">Reserve</th>
+        <th class="fc-num">Auction</th>
+        <th>Expires</th>
+      </tr>
+    </thead>
+    <tbody>{data.active.map((p) => <PositionRow p={p} />)}</tbody>
+  </table>
+</div>
+{
+  data.inactive.length > 0 && (
+    <details class="mt-3">
+      <summary class="ty-small text-[var(--color-gray-75)] cursor-pointer">{data.inactive.length} closed or denied positions</summary>
+      <div class="overflow-x-auto mt-2 opacity-70">
+        <table class="fc-table">
+          <tbody>{data.inactive.map((p) => <PositionRow p={p} />)}</tbody>
+        </table>
+      </div>
+    </details>
+  )
+}
+<p class="ty-2xs text-[var(--color-gray-60)] mt-3">
+  Collateral ratio = collateral value at the current price ÷ minted. Open a position on <a href="https://app.frankencoin.com/monitoring" target="_blank" rel="noopener noreferrer" class="underline">app.frankencoin.com ↗</a>.
+</p>

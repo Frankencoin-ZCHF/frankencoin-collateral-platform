@@ -1,0 +1,25 @@
+---
+/* Renders one content-block result: the type's component, or an inline notice for invalid/failed blocks. */
+import type { ContentBlockResult } from "@/blocks/types";
+import Unavailable from "@/components/Unavailable.astro";
+
+interface Props {
+  result: ContentBlockResult;
+}
+const { result } = Astro.props as Props;
+const spec = (result.spec ?? {}) as { title?: string };
+---
+
+{
+  result.status === "ok" && result.Component ? (
+    <result.Component data={result.data} title={spec.title} spec={result.spec} />
+  ) : result.status === "invalid" ? (
+    <div class="my-4 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-4 py-3 ty-xs text-amber-900" role="note">
+      <span class="font-bold">Unrenderable block</span> ({result.source} #{result.index + 1}): {result.error}
+    </div>
+  ) : result.status === "empty" ? null : (
+    <div class="my-4">
+      <Unavailable compact message={`${spec.title ?? result.type} block: ${result.error ?? "unavailable"}`} />
+    </div>
+  )
+}
