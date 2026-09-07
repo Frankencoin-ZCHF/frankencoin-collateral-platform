@@ -17,15 +17,12 @@ const { rows } = Astro.props as Props;
         <th>Ticker</th>
         <th>Lifecycle</th>
         <th>Assessment</th>
-        <th class="fc-num">Attention</th>
-        <th>Free float</th>
-        <th class="fc-num">48h downside</th>
-        <th class="fc-num">Assessed reserve</th>
-        <th class="fc-num">Oracle price CHF</th>
-        <th class="fc-num">Open positions</th>
+        <th>Live risk</th>
         <th class="fc-num">Minted ZCHF</th>
-        <th class="fc-num">Min. liq. buffer</th>
-        <th class="fc-num">Live premium</th>
+        <th class="fc-num" title="Price drop until the riskiest active position becomes challengeable">Min. liq. buffer</th>
+        <th class="fc-num">Open positions</th>
+        <th class="fc-num">Oracle price CHF</th>
+        <th class="fc-num" title="Assessment-review items">Review</th>
       </tr>
     </thead>
     <tbody>
@@ -37,16 +34,19 @@ const { rows } = Astro.props as Props;
               <span class="block ty-2xs text-[var(--color-gray-60)]">{r.name}</span>
             </td>
             <td><Pill value={r.lifecycle} /></td>
-            <td><Pill value={r.status === "none" ? "none" : r.status} kind={r.status} /></td>
-            <td class="fc-num">{r.attentionCount ? <a href={r.attentionUrl} class={`fc-pill ${r.attentionHigh ? "fc-pill-insufficient" : "fc-pill-sufficient"}`} title={r.attention.join("\n")}>{r.attentionCount}</a> : "–"}</td>
-            <td><Pill value={r.freeFloat} /></td>
-            <td class="fc-num">{formatPercent(r.marketRiskPct)}</td>
-            <td class="fc-num">{formatPercent(r.retainedReservePct, 1)}</td>
-            <td class="fc-num">{formatPrice(r.priceChf)}</td>
-            <td class="fc-num">{r.positionsOpen ?? "–"}</td>
+            <td><Pill value={r.status === "none" ? (r.assessmentUnavailable ? "unavailable" : "none") : r.status} kind={r.status === "none" && r.assessmentUnavailable ? "neutral" : r.status} /></td>
+            <td>
+              {r.liveRiskState === "ok" ? (
+                <span class="fc-pill fc-pill-strong" title="No live risk items at the current oracle price">ok</span>
+              ) : (
+                <a href={r.attentionUrl} class={`fc-pill ${r.liveRiskState === "risk" ? "fc-pill-insufficient" : "fc-pill-sufficient"}`} title={r.liveRisk.join("\n")}>{r.liveRiskState === "risk" ? "risk" : "watch"} · {r.liveRiskCount}</a>
+              )}
+            </td>
             <td class="fc-num">{formatCompact(r.mintedZchf)}</td>
             <td class={`fc-num ${r.minLiquidationBufferPct != null && r.minLiquidationBufferPct < 5 ? "text-red-700" : ""}`}>{formatPercent(r.minLiquidationBufferPct, 1)}</td>
-            <td class="fc-num">{formatPercent(r.riskPremiumAvgPct)}</td>
+            <td class="fc-num">{r.positionsOpen ?? "–"}</td>
+            <td class="fc-num">{formatPrice(r.priceChf)}</td>
+            <td class="fc-num">{r.reviewCount ? <a href={r.attentionUrl} class="fc-pill fc-pill-neutral" title={r.review.join("\n")}>{r.reviewCount}</a> : "–"}</td>
           </tr>
         ))
       }

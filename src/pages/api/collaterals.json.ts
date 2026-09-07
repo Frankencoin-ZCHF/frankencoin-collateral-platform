@@ -1,6 +1,7 @@
 import type { APIRoute } from "astro";
 import * as collaterals from "@/services/collaterals";
 import { toRow } from "@/lib/rows";
+import { summarizeAttention } from "@/services/attention";
 import { safeMessage, describeForLog } from "@/lib/errors";
 
 export const prerender = false;
@@ -16,6 +17,7 @@ export const GET: APIRoute = async () => {
       warnings: set.warnings,
       integrity: set.records.filter((r) => r.issues.some((i) => i.severity !== "low")).map((r) => ({ slug: r.slug, issues: r.issues.filter((i) => i.severity !== "low") })),
       summary: collaterals.summarize(set.records),
+      attention: summarizeAttention(set.records),
       count: set.records.length,
       collaterals: set.records.map(toRow),
     };

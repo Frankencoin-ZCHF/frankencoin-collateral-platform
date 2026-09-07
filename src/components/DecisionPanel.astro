@@ -4,8 +4,7 @@
 import type { BlockContext } from "@/blocks/types";
 import LifecycleBadges from "./LifecycleBadges.astro";
 import { formatCompact, formatDate, formatDateTime, formatPercent } from "@/lib/numbers";
-import { compareParameters } from "@/services/comparison";
-import { attentionGroups } from "@/services/attention";
+import { itemsFor } from "@/services/attention";
 
 interface Props {
   ctx: BlockContext;
@@ -16,12 +15,14 @@ const { ctx, protocolFetchedAt, protocolDegraded } = Astro.props as Props;
 const { record, assessment, version } = ctx;
 const l = record.live;
 const s = l?.safety ?? null;
-const rows = assessment ? compareParameters(assessment.data.params, l) : [];
-const differs = rows.filter((r) => r.verdict === "differs");
-// Same list as the table column and the /attention page, so the numbers agree everywhere.
-const attentionItems = attentionGroups([record])[0]?.items ?? [];
-const attentionHigh = attentionItems.filter((i) => i.severity === "high").length;
+const items = itemsFor(record);
+const liveItems = items.filter((i) => i.queue === "live");
+const reviewItems = items.filter((i) => i.queue === "review");
+const liveHigh = liveItems.filter((i) => i.severity === "high").length;
 const bufferTone = s?.minLiquidationBufferPct == null ? "" : s.minLiquidationBufferPct < 5 ? "text-red-700" : s.minLiquidationBufferPct < 15 ? "text-amber-700" : "text-emerald-700";
+const today = new Date().toISOString().slice(0, 10);
+const futureDate = Boolean(assessment?.data.assessmentDate && assessment.data.assessmentDate > today);
+const short = (t: string) => t.replace(/ (differs from draft proposal|deviates from the published assessment)$/, "");
 ---
 
 <section class="fc-card p-5 flex flex-col gap-4" aria-label="Decision summary">
@@ -37,40 +38,42 @@ const bufferTone = s?.minLiquidationBufferPct == null ? "" : s.minLiquidationBuf
 
   <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
     <div>
+      <p class="fc-kv-label">Live risk now</p>
+      <p class={`fc-kv-value ${liveHigh ? "text-red-700" : liveItems.length ? "text-amber-700" : "text-emerald-700"}`}>
+        {liveItems.length > 0 ? <a href={`/attention#${record.slug}`} class="underline decoration-dotted hover:text-[var(--color-brand-swiss)]">{liveItems.length}</a> : "calm"}
+      </p>
+      <p class="fc-kv-unit">{liveItems.length ? liveItems.map((i) => short(i.title)).join(", ") : "no challenges, no debt near liquidation, sources agree"}</p>
+    </div>
+    <div>
       <p class="fc-kv-label">Debt (minted ZCHF)</p>
       <p class="fc-kv-value">{l ? formatCompact(l.totalMintedZchf) : "–"}</p>
       <p class="fc-kv-unit">{l?.collateralValueChf != null ? `against ${formatCompact(l.collateralValueChf)} CHF oracle-valued collateral` : "no on-chain positions"}</p>
     </div>
     <div>
       <p class="fc-kv-label">Minimum liquidation buffer</p>
-      <p class={`fc-kv-value ${bufferTone}`}>{s ? formatPercent(s.minLiquidationBufferPct, 1) : "–"}</p>
-      <p class="fc-kv-unit">{s ? `${formatCompact(s.debtWithin.pct10)} ZCHF within 10 % of liquidation` : "no priced positions"}</p>
+      <p class={`fc-kv-value ${bufferTone}`}>{s ? <a href="#positions-at-risk" class="hover:underline">{formatPercent(s.minLiquidationBufferPct, 1)}</a> : "–"}</p>
+      <p class="fc-kv-unit">{s ? <><a href="#positions-at-risk" class="underline decoration-dotted">{formatCompact(s.debtWithin.pct10)} ZCHF within 10 %</a> of liquidation — click for the positions</> : "no priced positions"}</p>
     </div>
     <div>
-      <p class="fc-kv-label">Items requiring attention</p>
-      <p class={`fc-kv-value ${attentionHigh ? "text-red-700" : attentionItems.length ? "text-amber-700" : ""}`}>
-        {attentionItems.length > 0 ? <a href={`/attention#${record.slug}`} class="underline decoration-dotted hover:text-[var(--color-brand-swiss)]">{attentionItems.length}</a> : "0"}
+      <p class="fc-kv-label">Assessment review</p>
+      <p class={`fc-kv-value ${reviewItems.length ? "text-[var(--color-neutral-650)]" : ""}`}>
+        {reviewItems.length > 0 ? <a href={`/attention#${record.slug}`} class="underline decoration-dotted hover:text-[var(--color-brand-swiss)]">{reviewItems.length}</a> : assessment ? "0" : "–"}
       </p>
-      <p class="fc-kv-unit">{attentionItems.length ? attentionItems.map((i) => i.title.replace(/ differs from assessment$/, "")).join(", ") : "nothing at the current oracle price"}</p>
-    </div>
-    <div>
-      <p class="fc-kv-label">Governance reference</p>
-      <p class="fc-kv-value">
-        {assessment?.data.discussionUrl ? <a href={assessment.data.discussionUrl} target="_blank" rel="noopener noreferrer" class="underline text-[var(--color-blue-39)]">Discussion ↗</a> : <span class="text-[var(--color-gray-60)]">not linked</span>}
-      </p>
-      <p class="fc-kv-unit">approval / review data is not yet published by the protocol</p>
+      <p class="fc-kv-unit">{reviewItems.length ? reviewItems.map((i) => short(i.title)).join(", ") : assessment ? "live settings match the proposal" : "no assessment to compare"}</p>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-3 border-t border-[var(--color-gray-20)] pt-3 ty-xs text-[var(--color-gray-75)]">
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-[var(--color-gray-20)] pt-3 ty-xs text-[var(--color-gray-75)]">
     <div>
       <span class="fc-kv-label">Assessment snapshot</span>
       {
         assessment ? (
           <p>
-            authored {formatDate(assessment.data.assessmentDate)} by <span class="font-bold text-[var(--color-neutral-700)]">{assessment.data.author}</span> · {assessment.status}
+            authored {formatDate(assessment.data.assessmentDate)}{futureDate && <span class="text-amber-700" title="The authored date lies in the future — most likely a typo in the assessment file. It has no bearing on the live figures."> (date in the future — likely a typo)</span>} by <span class="font-bold text-[var(--color-neutral-700)]">{assessment.data.author}</span> · {assessment.status}
             {version && <> · version <span class="font-mono">{version.shortSha}</span> committed {formatDateTime(version.date)}</>}
           </p>
+        ) : record.assessmentUnavailable ? (
+          <p>temporarily unavailable — the file could not be loaded in this snapshot and will be retried.</p>
         ) : (
           <p>none — this collateral has no risk assessment in the repository.</p>
         )
@@ -80,6 +83,12 @@ const bufferTone = s?.minLiquidationBufferPct == null ? "" : s.minLiquidationBuf
       <span class="fc-kv-label">Live protocol state</span>
       <p>
         {l ? <>Ethereum · api.frankencoin.com · fetched {formatDateTime(protocolFetchedAt)} · refreshes every minute{protocolDegraded.length > 0 && <span class="text-amber-700"> · degraded: {protocolDegraded.join(", ")}</span>}</> : "no on-chain data for this contract"}
+      </p>
+    </div>
+    <div>
+      <span class="fc-kv-label">Governance reference</span>
+      <p>
+        {assessment?.data.discussionUrl ? <a href={assessment.data.discussionUrl} target="_blank" rel="noopener noreferrer" class="underline text-[var(--color-blue-39)]">Discussion thread ↗</a> : "not linked"} · approval / review data is not yet published by the protocol
       </p>
     </div>
   </div>

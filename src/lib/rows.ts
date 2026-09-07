@@ -4,7 +4,7 @@
  */
 
 import type { CollateralLifecycle, CollateralRecord } from "@/types";
-import { attentionGroups } from "@/services/attention";
+import { itemsFor } from "@/services/attention";
 
 export interface CollateralRow {
   slug: string;
@@ -15,6 +15,7 @@ export interface CollateralRow {
   kind: "assessed" | "live-only" | "both";
   lifecycle: CollateralLifecycle;
   status: "draft" | "published" | "deprecated" | "none";
+  assessmentUnavailable: boolean;
   assessedOn: string | null;
   assessmentSha: string | null;
   author: string | null;
@@ -53,17 +54,25 @@ export interface CollateralRow {
   activeChallenges: number | null;
   totalChallenges: number | null;
   nextExpiry: string | null;
-  /** Number of items on the attention page for this collateral — the same list, so the numbers agree everywhere. */
-  attentionCount: number;
-  attentionHigh: number;
-  attention: string[];
+  /** Live-risk queue items for this collateral (same list as /attention#live). */
+  liveRiskCount: number;
+  liveRiskHigh: number;
+  liveRisk: string[];
+  /** Assessment-review queue items (same list as /attention#review). */
+  reviewCount: number;
+  review: string[];
+  /** Compact live-risk state for the grid: "ok" | "watch" | "risk". */
+  liveRiskState: "ok" | "watch" | "risk";
   attentionUrl: string;
 }
 
 export function toRow(r: CollateralRecord): CollateralRow {
   const a = r.assessment?.data ?? null;
   const l = r.live;
-  const items = attentionGroups([r])[0]?.items ?? [];
+  const items = itemsFor(r);
+  const liveItems = items.filter((i) => i.queue === "live");
+  const reviewItems = items.filter((i) => i.queue === "review");
+  const liveHigh = liveItems.filter((i) => i.severity === "high").length;
   return {
     slug: r.slug,
     url: `/collateral/${r.slug}`,
@@ -73,6 +82,7 @@ export function toRow(r: CollateralRecord): CollateralRow {
     kind: r.kind,
     lifecycle: r.lifecycle,
     status: r.assessment?.status ?? "none",
+    assessmentUnavailable: Boolean(r.assessmentUnavailable),
     assessedOn: a?.assessmentDate ?? null,
     assessmentSha: r.assessment?.ref?.shortSha ?? null,
     author: a?.author ?? null,
@@ -111,9 +121,12 @@ export function toRow(r: CollateralRecord): CollateralRow {
     activeChallenges: l ? l.challenges.active : null,
     totalChallenges: l ? l.challenges.total : null,
     nextExpiry: l?.nextExpiry ?? null,
-    attentionCount: items.length,
-    attentionHigh: items.filter((i) => i.severity === "high").length,
-    attention: items.map((i) => i.title),
+    liveRiskCount: liveItems.length,
+    liveRiskHigh: liveHigh,
+    liveRisk: liveItems.map((i) => i.title),
+    reviewCount: reviewItems.length,
+    review: reviewItems.map((i) => i.title),
+    liveRiskState: liveHigh > 0 ? "risk" : liveItems.length > 0 ? "watch" : "ok",
     attentionUrl: `/attention#${r.slug}`,
   };
 }

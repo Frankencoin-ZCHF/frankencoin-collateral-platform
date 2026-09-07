@@ -103,7 +103,7 @@ describe("join — identity is the contract address", () => {
     const w = records.find((r) => r.slug === "wsteth")!;
     expect(w.kind).toBe("both");
     expect(w.lifecycle).toBe("live");
-    expect(w.issues.map((i) => i.code)).toContain("live-without-published");
+    expect(w.issues.map((i) => i.code)).not.toContain("no-assessment"); // it has a (draft) assessment
     expect(new Set(records.map((r) => r.slug)).size).toBe(records.length);
     expect(records[0]!.lifecycle).toBe("live"); // live first
   });
@@ -124,10 +124,10 @@ describe("join — identity is the contract address", () => {
     expect(live.lifecycle).toBe("live");
   });
 
-  it("flags future assessment dates on drafts and rejects them on published assessments", () => {
+  it("tolerates future assessment dates on drafts (no integrity issue) and rejects them on published assessments", () => {
     const future = buildAssessment(text("wstETH.md").replace('"assessment_date": "2026-08-01"', '"assessment_date": "2027-08-01"'), "assessments/draft/wstETH.md", "draft", "wstETH", null, TODAY);
     const rec = join([future], snap, TODAY).find((r) => r.slug === "wsteth")!;
-    expect(rec.issues.map((i) => i.code)).toContain("future-date");
+    expect(rec.issues.map((i) => i.code)).not.toContain("future-date");
     expect(() => buildAssessment(text("wstETH.md").replace('"assessment_date": "2026-08-01"', '"assessment_date": "2027-08-01"'), "assessments/published/wstETH.md", "published", "wstETH", null, TODAY)).toThrow(/future/);
   });
 
@@ -155,8 +155,17 @@ describe("join — identity is the contract address", () => {
     const wbtc = records.find((r) => r.ticker === "WBTC")!;
     expect(wbtc.assessmentUnavailable).toBe("github timed out");
     expect(wbtc.issues.map((i) => i.code)).toContain("assessment-unavailable");
-    expect(wbtc.issues.map((i) => i.code)).not.toContain("live-without-published");
+    expect(wbtc.issues.map((i) => i.code)).not.toContain("no-assessment");
     expect(records.find((r) => r.ticker === "WETH")!.assessmentUnavailable).toBeNull();
+  });
+
+  it("when the whole index is unavailable, nothing is called 'without any assessment'", () => {
+    const records = join([], snap, TODAY, [], "the assessments repository could not be read from GitHub");
+    expect(records.filter((r) => r.lifecycle === "live").every((r) => r.assessmentUnavailable !== null)).toBe(true);
+    expect(records.some((r) => r.issues.some((i) => i.code === "no-assessment"))).toBe(false);
+    const s = summarize(records);
+    expect(s.coverage.missing).toBe(0);
+    expect(s.coverage.unavailable).toBe(s.lifecycle.live);
   });
 
   it("summarises lifecycle × assessment dimensions", () => {
@@ -164,7 +173,9 @@ describe("join — identity is the contract address", () => {
     expect(s.lifecycle.live).toBeGreaterThan(10);
     expect(s.assessments.draft).toBe(2);
     expect(s.assessments.none).toBeGreaterThan(0);
-    expect(s.liveWithoutPublished).toBe(s.lifecycle.live);
+    expect(s.coverage.draft).toBe(2);
+    expect(s.coverage.missing).toBe(s.lifecycle.live - 2);
+    expect(s.concentration?.ticker).toBeDefined();
     expect(s.totalMintedZchf).toBeGreaterThan(30_000_000); // includes CHFAU's 600k from the aggregate
     expect(s.lastAssessmentDate).toBe("2026-08-01");
   });

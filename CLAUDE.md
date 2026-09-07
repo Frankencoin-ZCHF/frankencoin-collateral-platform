@@ -119,7 +119,9 @@ npm (no CDN).
   `retained_reserve`/`target_interest_rate` are fractions (`0.25`, `0.0075`) — `lib/normalize.ts`
   turns everything into percents; `Assessment.raw` keeps the verbatim object for diffs.
 - raw.githubusercontent.com answers in 4–8 s per file; `upstream/github.ts` limits raw fetches to 4 in flight with a 20 s timeout. A partial index (transient fetch failures) is dropped from the cache after 30 s and the affected collaterals show "assessment temporarily unavailable" instead of "no assessment".
-- "Items requiring attention" is ONE list (`services/attention.ts`): the table column, the decision panel, the dashboard tile and `/attention` all derive from it, so counts always agree. `record.issues` (integrity issues) is a subset of it.
+- Attention is ONE list in TWO queues (`services/attention.ts`): `live` (challenges, debt near liquidation, stale/divergent data, address mismatch, no assessment at all, deviations from a *published* assessment) and `review` (differences from a *draft* proposal, missing governance reference). The table's "Live risk"/"Review" cells, the decision panel, the dashboard tiles and `/attention#live|#review` all derive from it, so counts always agree. `record.issues` (integrity issues) are always live-queue.
+- Timestamp ordering is NOT an integrity rule: assessment date, commit time and live fetch time are separate provenance clocks. A future assessment date is a note beside the date (likely typo), never an attention item — but a *published* assessment with a future date is rejected at parse time.
+- Comparison wording depends on the assessment stage (`compareParameters(..., status)`): against a draft, never say "less conservative"/"deviates" — say "differs from draft proposal".
 - Real assessment files don't always follow the template headings (e.g. no `## Tail Risks`
   wrapper) — never key logic on heading text.
 - `/prices/list` may list a token twice (cbBTC); the map is keyed by address so last write wins.

@@ -42,16 +42,18 @@ export function deriveLifecycle(live: LiveCollateral | null): CollateralLifecycl
   return "proposed"; // known to the protocol, nothing open yet
 }
 
-function issuesFor(a: Assessment | null, live: LiveCollateral | null, lifecycle: CollateralLifecycle, today: string): IntegrityIssue[] {
+/**
+ * Integrity issues — defined defects only. Timestamp ordering between the assessment date,
+ * the commit time and the live fetch time is NOT an integrity rule (they are separate
+ * provenance clocks); a future assessment date is shown as a note next to the date instead.
+ */
+function issuesFor(a: Assessment | null, live: LiveCollateral | null, lifecycle: CollateralLifecycle, _today: string): IntegrityIssue[] {
   const issues: IntegrityIssue[] = [];
-  if (a?.data.assessmentDate && a.data.assessmentDate > today) {
-    issues.push({ code: "future-date", severity: "medium", message: `Assessment date ${a.data.assessmentDate} lies in the future.` });
-  }
   if (live?.reconciliation.divergent) {
     issues.push({ code: "feed-divergence", severity: "medium", message: live.reconciliation.note ?? "Position feed and protocol aggregate disagree." });
   }
-  if (lifecycle === "live" && a?.status !== "published") {
-    issues.push({ code: "live-without-published", severity: a ? "low" : "medium", message: a ? `Live collateral with a ${a.status} assessment.` : "Live collateral without any risk assessment." });
+  if (lifecycle === "live" && !a) {
+    issues.push({ code: "no-assessment", severity: "medium", message: "Live collateral without any risk assessment record." });
   }
   if (live?.price?.timestamp) {
     const ageH = (Date.now() - new Date(live.price.timestamp).getTime()) / 3_600_000;
@@ -60,8 +62,19 @@ function issuesFor(a: Assessment | null, live: LiveCollateral | null, lifecycle:
   return issues;
 }
 
-/** Pure join. Exported for tests. `failures` = assessment files that exist but could not be loaded. */
-export function join(items: Assessment[], live: Map<string, LiveCollateral>, today = new Date().toISOString().slice(0, 10), failures: ParseFailure[] = []): CollateralRecord[] {
+/**
+ * Pure join. Exported for tests.
+ * `failures` = assessment files that exist but could not be loaded;
+ * `indexUnavailable` = the whole assessments index could not be read (then NO collateral is
+ * called "without any assessment" — we simply don't know).
+ */
+export function join(
+  items: Assessment[],
+  live: Map<string, LiveCollateral>,
+  today = new Date().toISOString().slice(0, 10),
+  failures: ParseFailure[] = [],
+  indexUnavailable: string | null = null,
+): CollateralRecord[] {
   const records: CollateralRecord[] = [];
   const usedAddresses = new Set<string>();
   const usedSlugs = new Set<string>();
@@ -135,8 +148,8 @@ export function join(items: Assessment[], live: Map<string, LiveCollateral>, tod
   for (const l of liveOnly) {
     const lifecycle = deriveLifecycle(l);
     const slug = liveSlug.get(l.address)!;
-    const unavailable = failedBySlug.get(slug) ?? failedBySlug.get(slugFromTicker(l.symbol)) ?? null;
-    const issues = issuesFor(null, l, lifecycle, today).filter((i) => !(unavailable && i.code === "live-without-published"));
+    const unavailable = indexUnavailable ?? failedBySlug.get(slug) ?? failedBySlug.get(slugFromTicker(l.symbol)) ?? null;
+    const issues = issuesFor(null, l, lifecycle, today).filter((i) => !(unavailable && i.code === "no-assessment"));
     if (unavailable) {
       issues.unshift({ code: "assessment-unavailable", severity: "medium", message: `The assessment file could not be loaded in this snapshot (${unavailable}). It will be retried shortly.` });
     }
@@ -192,9 +205,11 @@ export function all(): Promise<CollateralSet> {
     const warnings: string[] = [];
     const [idx, snap] = await Promise.allSettled([assessments.index(), protocol.snapshot()]);
 
+    let indexUnavailable: string | null = null;
     if (idx.status === "rejected") {
       console.error(`[collaterals] assessments index failed: ${describeForLog(idx.reason)}`);
-      warnings.push("Risk assessments could not be loaded from GitHub.");
+      indexUnavailable = "the assessments repository could not be read from GitHub";
+      warnings.push("Risk assessments could not be loaded from GitHub — assessment stages and coverage are shown as unavailable, not as missing. Live protocol figures are unaffected.");
     }
     if (snap.status === "rejected") {
       console.error(`[collaterals] protocol snapshot failed: ${describeForLog(snap.reason)}`);
@@ -208,7 +223,7 @@ export function all(): Promise<CollateralSet> {
     const failures = idx.status === "fulfilled" ? idx.value.failures : [];
     if (failures.length) warnings.push(`${failures.length} assessment file${failures.length === 1 ? "" : "s"} could not be loaded from GitHub in this snapshot; the affected collaterals are marked "assessment unavailable" and will be retried shortly.`);
     const live = snap.status === "fulfilled" ? snap.value.byAddress : new Map<string, LiveCollateral>();
-    const records = join(items, live, undefined, failures);
+    const records = join(items, live, undefined, failures, indexUnavailable);
     await enrichMarket(records);
 
     return {
@@ -231,22 +246,30 @@ export async function bySlug(slug: string): Promise<CollateralRecord | null> {
 export interface Summary {
   lifecycle: Record<CollateralLifecycle, number>;
   assessments: { published: number; draft: number; deprecated: number; none: number };
-  liveWithoutPublished: number;
+  /** Assessment coverage of LIVE collaterals: published / under review (draft) / missing / unavailable. */
+  coverage: { published: number; draft: number; missing: number; unavailable: number };
   activePositions: number;
   totalMintedZchf: number;
   totalCollateralValueChf: number;
+  totalRemainingLimitZchf: number;
   /** ZCHF minted in positions within 10 % of their liquidation price. */
   debtWithin10Pct: number;
   activeChallenges: number;
   integrityIssues: number;
+  /** Largest single collateral by minted ZCHF. */
+  concentration: { ticker: string; slug: string; sharePct: number } | null;
+  stalePrices: number;
   lastAssessmentDate: string | null;
 }
 
 export function summarize(records: CollateralRecord[]): Summary {
   const live = records.map((r) => r.live).filter((l): l is LiveCollateral => l !== null);
+  const liveRecords = records.filter((r) => r.lifecycle === "live");
   const dates = records.map((r) => r.assessment?.data.assessmentDate).filter((d): d is string => Boolean(d)).sort();
   const lifecycle: Record<CollateralLifecycle, number> = { live: 0, proposed: 0, draft: 0, closed: 0, denied: 0 };
   for (const r of records) lifecycle[r.lifecycle]++;
+  const totalMinted = sum(live.map((l) => l.totalMintedZchf));
+  const biggest = [...records].filter((r) => r.live).sort((a, b) => (b.live!.totalMintedZchf ?? 0) - (a.live!.totalMintedZchf ?? 0))[0];
   return {
     lifecycle,
     assessments: {
@@ -255,13 +278,21 @@ export function summarize(records: CollateralRecord[]): Summary {
       deprecated: records.filter((r) => r.assessment?.status === "deprecated").length,
       none: records.filter((r) => !r.assessment).length,
     },
-    liveWithoutPublished: records.filter((r) => r.lifecycle === "live" && r.assessment?.status !== "published").length,
+    coverage: {
+      published: liveRecords.filter((r) => r.assessment?.status === "published").length,
+      draft: liveRecords.filter((r) => r.assessment?.status === "draft").length,
+      missing: liveRecords.filter((r) => !r.assessment && !r.assessmentUnavailable).length,
+      unavailable: liveRecords.filter((r) => !r.assessment && Boolean(r.assessmentUnavailable)).length,
+    },
     activePositions: sum(live.map((l) => l.counts?.open ?? l.positions.active)),
-    totalMintedZchf: round(sum(live.map((l) => l.totalMintedZchf)), 0),
+    totalMintedZchf: round(totalMinted, 0),
     totalCollateralValueChf: round(sum(live.map((l) => l.collateralValueChf)), 0),
+    totalRemainingLimitZchf: round(sum(live.map((l) => l.remainingLimitZchf)), 0),
     debtWithin10Pct: round(sum(live.map((l) => l.safety?.debtWithin.pct10 ?? 0)), 0),
     activeChallenges: sum(live.map((l) => l.challenges.active)),
     integrityIssues: sum(records.map((r) => r.issues.filter((i) => i.severity !== "low").length)),
+    concentration: biggest && totalMinted > 0 ? { ticker: biggest.ticker, slug: biggest.slug, sharePct: round((biggest.live!.totalMintedZchf / totalMinted) * 100, 1) } : null,
+    stalePrices: records.filter((r) => r.issues.some((i) => i.code === "stale-price")).length,
     lastAssessmentDate: dates.at(-1) ?? null,
   };
 }

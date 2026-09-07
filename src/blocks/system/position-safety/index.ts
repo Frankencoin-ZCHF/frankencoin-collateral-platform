@@ -1,8 +1,26 @@
-/** Position safety: collateralisation, liquidation buffers and debt near liquidation over active positions. */
+/**
+ * Position safety: collateralisation, liquidation buffers, debt near liquidation — and the
+ * ranked list of positions that produce those numbers, so the operational next step
+ * ("which position?") is one click away.
+ */
 
 import type { SystemBlock } from "@/blocks/types";
+import { round } from "@/lib/numbers";
 import type { PositionSafety } from "@/types";
 import Block from "./Block.astro";
+
+export interface RankedPosition {
+  address: string;
+  url: string;
+  version: 1 | 2;
+  isOriginal: boolean;
+  minted: number;
+  collateralBalance: number;
+  collateralValueChf: number | null;
+  liquidationPriceZchf: number;
+  bufferPct: number;
+  challengeActive: boolean;
+}
 
 export interface PositionSafetyData {
   safety: PositionSafety;
@@ -11,6 +29,8 @@ export interface PositionSafetyData {
   symbol: string;
   /** Debt distribution by liquidation-buffer band (ZCHF). */
   bands: { label: string; minted: number }[];
+  /** Active positions with debt, riskiest first. */
+  ranked: RankedPosition[];
 }
 
 const positionSafety: SystemBlock<PositionSafetyData> = {
@@ -23,9 +43,24 @@ const positionSafety: SystemBlock<PositionSafetyData> = {
     const l = ctx.record.live!;
     const s = l.safety!;
     const price = l.price!.chf;
+    const challenged = new Set(l.challenges.list.filter((c) => c.isActive).map((c) => c.position.toLowerCase()));
     const active = l.positions.list.filter((p) => p.status === "active" && p.minted > 0 && p.liquidationPriceZchf > 0);
     const buffer = (liq: number) => ((price - liq) / price) * 100;
     const band = (lo: number, hi: number) => active.filter((p) => buffer(p.liquidationPriceZchf) > lo && buffer(p.liquidationPriceZchf) <= hi).reduce((n, p) => n + p.minted, 0);
+    const ranked: RankedPosition[] = active
+      .map((p) => ({
+        address: p.address,
+        url: p.url,
+        version: p.version,
+        isOriginal: p.isOriginal,
+        minted: p.minted,
+        collateralBalance: p.collateralBalance,
+        collateralValueChf: p.collateralValueChf,
+        liquidationPriceZchf: p.liquidationPriceZchf,
+        bufferPct: round(buffer(p.liquidationPriceZchf), 1),
+        challengeActive: challenged.has(p.address.toLowerCase()),
+      }))
+      .sort((a, b) => a.bufferPct - b.bufferPct);
     return {
       safety: s,
       totalMintedZchf: l.totalMintedZchf,
@@ -38,6 +73,7 @@ const positionSafety: SystemBlock<PositionSafetyData> = {
         { label: "20 – 40 %", minted: band(20, 40) },
         { label: "> 40 %", minted: band(40, Infinity) },
       ],
+      ranked,
     };
   },
   Component: Block,

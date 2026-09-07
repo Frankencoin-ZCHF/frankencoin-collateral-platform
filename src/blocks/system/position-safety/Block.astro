@@ -1,6 +1,6 @@
 ---
 import type { PositionSafetyData } from "./index";
-import { formatCompact, formatPercent } from "@/lib/numbers";
+import { formatCompact, formatNumber, formatPercent, formatPrice, shortAddress } from "@/lib/numbers";
 interface Props {
   data: PositionSafetyData;
 }
@@ -8,6 +8,8 @@ const { data } = Astro.props as Props;
 const s = data.safety;
 const maxBand = Math.max(1, ...data.bands.map((b) => b.minted));
 const tone = (pct: number | null) => (pct === null ? "" : pct < 5 ? "text-red-700" : pct < 15 ? "text-amber-700" : "text-emerald-700");
+const near = data.ranked.filter((p) => p.bufferPct <= 10);
+const shown = near.length ? data.ranked.slice(0, Math.max(near.length, 5)) : data.ranked.slice(0, 5);
 ---
 
 <div class="fc-kv !grid-cols-2">
@@ -18,12 +20,12 @@ const tone = (pct: number | null) => (pct === null ? "" : pct < 5 ? "text-red-70
   </div>
   <div>
     <p class="fc-kv-label">Minimum liquidation buffer</p>
-    <p class={`fc-kv-value ${tone(s.minLiquidationBufferPct)}`}>{formatPercent(s.minLiquidationBufferPct, 1)}</p>
+    <p class={`fc-kv-value ${tone(s.minLiquidationBufferPct)}`}><a href="#positions-at-risk" class="hover:underline">{formatPercent(s.minLiquidationBufferPct, 1)}</a></p>
     <p class="fc-kv-unit">price drop until the riskiest position is challengeable · median {formatPercent(s.medianLiquidationBufferPct, 1)}</p>
   </div>
   <div>
     <p class="fc-kv-label">Debt within 10 % of liquidation</p>
-    <p class={`fc-kv-value ${s.debtWithin.pct10 > 0 ? "text-amber-700" : ""}`}>{formatCompact(s.debtWithin.pct10)} ZCHF</p>
+    <p class={`fc-kv-value ${s.debtWithin.pct10 > 0 ? "text-amber-700" : ""}`}><a href="#positions-at-risk" class="hover:underline">{formatCompact(s.debtWithin.pct10)} ZCHF</a></p>
     <p class="fc-kv-unit">within 5 %: {formatCompact(s.debtWithin.pct5)} · within 20 %: {formatCompact(s.debtWithin.pct20)}</p>
   </div>
   <div>
@@ -32,6 +34,7 @@ const tone = (pct: number | null) => (pct === null ? "" : pct < 5 ? "text-red-70
     <p class="fc-kv-unit">active, with debt, at {formatCompact(data.priceChf)} CHF / {data.symbol}</p>
   </div>
 </div>
+
 <div class="mt-4">
   <p class="fc-kv-label mb-2">Debt by liquidation buffer</p>
   <ul class="flex flex-col gap-1">
@@ -48,3 +51,42 @@ const tone = (pct: number | null) => (pct === null ? "" : pct < 5 ? "text-red-70
     }
   </ul>
 </div>
+
+<details id="positions-at-risk" class="mt-4 scroll-mt-24 group" open={near.length > 0} x-data x-init="if (window.location.hash === '#positions-at-risk') $el.open = true">
+  <summary class="list-none cursor-pointer flex items-center justify-between gap-2">
+    <span class="fc-kv-label">Positions closest to liquidation {near.length > 0 && <span class="fc-pill fc-pill-sufficient ml-1">{near.length} within 10 %</span>}</span>
+    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 text-[var(--color-gray-60)] transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
+  </summary>
+  <div class="overflow-x-auto mt-2">
+    <table class="fc-table">
+      <thead>
+        <tr>
+          <th>Position</th>
+          <th class="fc-num">Buffer</th>
+          <th class="fc-num">Debt ZCHF</th>
+          <th class="fc-num">{data.symbol}</th>
+          <th class="fc-num">Liq. price</th>
+          <th>State</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          shown.map((p) => (
+            <tr>
+              <td>
+                <a href={p.url} target="_blank" rel="noopener noreferrer" class="font-mono ty-xs text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)]">{shortAddress(p.address, 6)}</a>
+                <span class="block ty-2xs text-[var(--color-gray-60)]">v{p.version}{p.isOriginal ? " · original" : " · clone"}</span>
+              </td>
+              <td class={`fc-num font-bold ${tone(p.bufferPct)}`}>{formatPercent(p.bufferPct, 1)}</td>
+              <td class="fc-num">{formatCompact(p.minted)}</td>
+              <td class="fc-num">{formatNumber(p.collateralBalance, p.collateralBalance < 10 ? 4 : 2)}</td>
+              <td class="fc-num">{formatPrice(p.liquidationPriceZchf)}</td>
+              <td>{p.challengeActive ? <span class="fc-pill fc-pill-insufficient">challenged</span> : <span class="ty-2xs text-[var(--color-gray-60)]">open</span>}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+  <p class="ty-2xs text-[var(--color-gray-60)] mt-2">Buffer = price drop until the position becomes challengeable, at oracle price {formatPrice(data.priceChf)} CHF. {data.ranked.length > shown.length && `Showing ${shown.length} of ${data.ranked.length}; the full list is in the Positions block.`}</p>
+</details>

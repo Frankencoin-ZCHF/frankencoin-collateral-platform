@@ -1,25 +1,29 @@
 ---
 import type { RiskParametersData } from "./index";
-import { VERDICT_LABEL } from "@/services/comparison";
+import { verdictLabel } from "@/services/comparison";
 interface Props {
   data: RiskParametersData;
 }
 const { data } = Astro.props as Props;
+const published = data.status === "published";
 const PILL: Record<string, string> = {
   matches: "fc-pill-published",
   "within-range": "fc-pill-strong",
-  differs: "fc-pill-insufficient",
+  differs: published ? "fc-pill-insufficient" : "fc-pill-neutral",
   "not-comparable": "fc-pill-neutral",
   unavailable: "fc-pill-neutral",
 };
+const baseline = published ? "the published assessment" : "the draft proposal";
 ---
 
 <p class="ty-small text-[var(--color-neutral-650)] mb-3">
   {
     data.hasLive
       ? data.differs === 0
-        ? "Every comparable live parameter matches the assessment or is more conservative."
-        : `${data.differs} parameter${data.differs === 1 ? "" : "s"} deviate${data.differs === 1 ? "s" : ""} from the assessment in the less conservative direction.`
+        ? `Every comparable live parameter matches ${baseline} or is more conservative.`
+        : published
+          ? `${data.differs} parameter${data.differs === 1 ? "" : "s"} deviate${data.differs === 1 ? "s" : ""} from the published assessment in the less conservative direction.`
+          : `${data.differs} live parameter${data.differs === 1 ? "" : "s"} differ${data.differs === 1 ? "s" : ""} from the draft proposal. The proposal has not been adopted as a baseline, so these are review items, not breaches.`
       : "No active on-chain positions yet — the on-chain column fills in once a position is opened."
   }
 </p>
@@ -28,7 +32,7 @@ const PILL: Record<string, string> = {
     <thead>
       <tr>
         <th>Parameter</th>
-        <th class="fc-num">Assessed</th>
+        <th class="fc-num">{published ? "Assessed" : "Draft proposal"}</th>
         <th class="fc-num">On-chain (active positions)</th>
         <th>Verdict</th>
       </tr>
@@ -44,7 +48,7 @@ const PILL: Record<string, string> = {
             <td class="fc-num">{r.assessed}</td>
             <td class="fc-num">{r.onchain}</td>
             <td class="min-w-56">
-              <span class={`fc-pill ${PILL[r.verdict]}`}>{VERDICT_LABEL[r.verdict]}</span>
+              <span class={`fc-pill ${PILL[r.verdict]}`}>{verdictLabel(r.verdict, data.status)}</span>
               <span class="block ty-2xs text-[var(--color-gray-75)] mt-1 normal-case">{r.explanation}</span>
             </td>
           </tr>

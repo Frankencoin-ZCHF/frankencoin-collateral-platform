@@ -5,9 +5,9 @@ import AttentionList from "@/components/AttentionList.astro";
 import Unavailable from "@/components/Unavailable.astro";
 import Button from "@/components/Button/Button.astro";
 import * as collaterals from "@/services/collaterals";
-import { attentionGroups } from "@/services/attention";
+import { attentionGroups, summarizeAttention } from "@/services/attention";
 import { describeForLog } from "@/lib/errors";
-import { formatDateTime } from "@/lib/numbers";
+import { formatCompact, formatDateTime } from "@/lib/numbers";
 
 export const prerender = false;
 
@@ -17,24 +17,24 @@ try {
 } catch (e) {
   console.error(`[attention] ${describeForLog(e)}`);
 }
-const groups = attentionGroups(set?.records ?? []);
-const total = groups.reduce((n, g) => n + g.items.length, 0);
-const high = groups.reduce((n, g) => n + g.items.filter((i) => i.severity === "high").length, 0);
+const records = set?.records ?? [];
+const live = attentionGroups(records, "live");
+const review = attentionGroups(records, "review");
+const att = summarizeAttention(records);
 
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 ---
 
-<Base title="Items requiring attention" description="Integrity issues, live parameters deviating from their assessment, debt close to liquidation and running challenges across all Frankencoin collaterals.">
+<Base title="Attention" description="Live risk now (challenges, debt close to liquidation, data-integrity exceptions) and assessment-review items across all Frankencoin collaterals.">
   <Section variant="accent" pad="xs" width="wide">
     <nav class="ty-xs text-[var(--color-gray-75)] mb-3" aria-label="Breadcrumb">
       <a href="/" class="hover:underline">Collaterals</a> › Attention
     </nav>
     <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
       <div class="max-w-3xl">
-        <h1 class="ty-large-title">Items requiring attention</h1>
+        <h1 class="ty-large-title">Attention</h1>
         <p class="ty-body-2 text-[var(--color-neutral-650)] mt-2">
-          {total} item{total === 1 ? "" : "s"} across {groups.length} collateral{groups.length === 1 ? "" : "s"}{high > 0 && <> · <span class="text-red-800 font-bold">{high} high severity</span></>}.
-          Integrity issues, live parameters that deviate from the assessment in the less conservative direction, debt close to liquidation, and running challenges. Click a row for details.
+          Two queues, kept apart on purpose: <a href="#live" class="underline">live risk now</a> is what a risk operator acts on today; <a href="#review" class="underline">assessment review</a> is where proposals differ from live settings and await a governance or review decision.
         </p>
       </div>
       <Button href="/" variant="secondary" size="sm">All collaterals</Button>
@@ -43,11 +43,30 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
   </Section>
 
   <Section pad="xs" width="wide">
-    <div class="fc-card p-5">
-      <AttentionList groups={groups} />
+    <div class="flex flex-col gap-8">
+      <section id="live" class="fc-card p-5 scroll-mt-24" aria-labelledby="live-title">
+        <div class="flex flex-wrap items-baseline justify-between gap-3 mb-1">
+          <h2 id="live-title" class="ty-title-2 text-[var(--color-brand-deep-blue)] flex items-center gap-2">
+            Live risk now
+            <span class={`fc-pill ${att.live.items === 0 ? "fc-pill-strong" : att.live.high ? "fc-pill-insufficient" : "fc-pill-sufficient"}`}>{att.live.items === 0 ? "calm" : att.live.high ? "action needed" : "watch"}</span>
+          </h2>
+          <span class="ty-xs text-[var(--color-gray-75)]">{att.live.items} item{att.live.items === 1 ? "" : "s"} · {att.live.challenges} active challenge{att.live.challenges === 1 ? "" : "s"} · {formatCompact(att.live.debtWithin10Pct)} ZCHF within 10 % of liquidation · {att.live.integrity} data-integrity exception{att.live.integrity === 1 ? "" : "s"}</span>
+        </div>
+        <p class="ty-2xs text-[var(--color-gray-60)] mb-4">Active challenges, debt close to liquidation, stale or divergent price/position data, contract-address mismatches, live collateral with no assessment record, and deviations from a <em>published</em> assessment. Red = act now; amber = watch.</p>
+        <AttentionList groups={live} />
+      </section>
+
+      <section id="review" class="fc-card p-5 scroll-mt-24" aria-labelledby="review-title">
+        <div class="flex flex-wrap items-baseline justify-between gap-3 mb-1">
+          <h2 id="review-title" class="ty-title-2 text-[var(--color-brand-deep-blue)]">Assessment review</h2>
+          <span class="ty-xs text-[var(--color-gray-75)]">{att.review.items} item{att.review.items === 1 ? "" : "s"} · {att.review.draftAssessments} draft assessment{att.review.draftAssessments === 1 ? "" : "s"} · {att.review.parameterDifferences} draft-proposal difference{att.review.parameterDifferences === 1 ? "" : "s"}</span>
+        </div>
+        <p class="ty-2xs text-[var(--color-gray-60)] mb-4">Differences between live settings and a <em>draft</em> proposal, and assessments without a governance reference. A draft is not an approved baseline, so these are review material — not live risk and not a breach of anything.</p>
+        <AttentionList groups={review} />
+      </section>
     </div>
     <p class="ty-2xs text-[var(--color-gray-60)] mt-3">
-      Live protocol state fetched {formatDateTime(set?.protocolFetchedAt ?? null)} · assessments at commit <span class="font-mono">{set?.assessmentsHead?.shortSha ?? "–"}</span>. Severity: red = integrity or imminent liquidation risk, amber = deviation worth a look.
+      Live protocol state fetched {formatDateTime(set?.protocolFetchedAt ?? null)} · assessments at commit <span class="font-mono">{set?.assessmentsHead?.shortSha ?? "–"}</span>.
     </p>
   </Section>
 </Base>

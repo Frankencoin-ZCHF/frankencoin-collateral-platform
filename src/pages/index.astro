@@ -7,10 +7,10 @@ import Unavailable from "@/components/Unavailable.astro";
 import Button from "@/components/Button/Button.astro";
 import ui from "@/content/ui.json";
 import * as collaterals from "@/services/collaterals";
-import { attentionGroups } from "@/services/attention";
+import { summarizeAttention } from "@/services/attention";
 import { toRow } from "@/lib/rows";
 import { jsonForScript } from "@/lib/html";
-import { formatCompact, formatDateTime, formatNumber } from "@/lib/numbers";
+import { formatCompact, formatDateTime, formatNumber, formatPercent } from "@/lib/numbers";
 import { describeForLog } from "@/lib/errors";
 
 export const prerender = false;
@@ -25,28 +25,53 @@ try {
 const records = set?.records ?? [];
 const rows = records.map(toRow);
 const summary = collaterals.summarize(records);
-const attention = attentionGroups(records);
-const attentionCount = attention.reduce((n, g) => n + g.items.length, 0);
-const attentionHigh = attention.reduce((n, g) => n + g.items.filter((i) => i.severity === "high").length, 0);
+const att = summarizeAttention(records);
+const calm = att.live.items === 0;
 
-const lifecycleKpis = [
-  { label: "Live collaterals", value: String(summary.lifecycle.live), sub: "with open positions", href: "#collaterals" },
-  { label: "Proposed", value: String(summary.lifecycle.proposed), sub: "known to the protocol, nothing open" },
-  { label: "Draft", value: String(summary.lifecycle.draft), sub: "assessment only, not on-chain" },
-  { label: "Closed / denied", value: String(summary.lifecycle.closed + summary.lifecycle.denied), sub: `${summary.lifecycle.closed} closed · ${summary.lifecycle.denied} denied` },
-  { label: "Published assessments", value: String(summary.assessments.published), sub: `${summary.assessments.draft} draft · ${summary.assessments.deprecated} deprecated` },
-  { label: "Live without published assessment", value: String(summary.liveWithoutPublished), sub: summary.liveWithoutPublished ? "review coverage gap" : "full coverage", href: "/attention" },
-];
-const exposureKpis = [
-  { label: "Minted ZCHF against live collateral", value: formatCompact(summary.totalMintedZchf), sub: `${formatNumber(summary.activePositions, 0)} open positions` },
-  { label: "Oracle-valued collateral", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "locked in open positions" },
-  { label: "Debt within 10 % of liquidation", value: formatCompact(summary.debtWithin10Pct), unit: "ZCHF", sub: summary.debtWithin10Pct > 0 ? "requires attention" : "none at the current oracle price", href: "/attention" },
+// 1. Protocol risk now
+const riskKpis = [
   {
-    label: "Items requiring attention",
-    value: String(attentionCount),
-    sub: attentionCount ? `${attentionHigh ? attentionHigh + " high · " : ""}${attention.length} collateral${attention.length === 1 ? "" : "s"} · view all →` : "nothing at current prices",
-    href: "/attention",
+    label: "Live risk now",
+    value: String(att.live.items),
+    sub: calm ? "nothing at the current oracle price" : `${att.live.high ? att.live.high + " high · " : ""}${att.live.collaterals} collateral${att.live.collaterals === 1 ? "" : "s"} · view live-risk queue →`,
+    href: "/attention#live",
+    tooltip: "Active challenges, debt close to liquidation, stale or divergent data, integrity exceptions",
   },
+  { label: "Active challenges", value: String(att.live.challenges), sub: att.live.challenges ? "liquidation auctions running" : "no auctions running", href: att.live.challenges ? "/attention#live" : "https://app.frankencoin.com/challenges" },
+  {
+    label: "Debt within 10 % of liquidation",
+    value: formatCompact(att.live.debtWithin10Pct),
+    unit: "ZCHF",
+    sub: att.live.debtWithin10Pct > 0 ? "a 10 % price drop would make it challengeable" : "none at the current oracle price",
+    href: "/attention#live",
+    tooltip: "ZCHF minted in positions whose liquidation price is within 10 % of the current oracle price",
+  },
+  { label: "Data-integrity exceptions", value: String(att.live.integrity), sub: att.live.integrity ? "source divergence, address mismatch, missing assessment" : "sources agree", href: "/attention#live" },
+];
+
+// 2. Exposure
+const exposureKpis = [
+  { label: "Minted ZCHF", value: formatCompact(summary.totalMintedZchf), sub: `${formatNumber(summary.activePositions, 0)} open positions against live collateral` },
+  { label: "Oracle-valued collateral", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "collateral quantity × current oracle price", tooltip: "Collateral quantity × current protocol oracle price, summed over open positions" },
+  { label: "Remaining aggregate limit", value: formatCompact(summary.totalRemainingLimitZchf), unit: "ZCHF", sub: "additional ZCHF mintable under current limits", tooltip: "Sum over collaterals of total limit − minted" },
+  summary.concentration
+    ? { label: "Largest concentration", value: formatPercent(summary.concentration.sharePct, 0), sub: `${summary.concentration.ticker} of all minted ZCHF`, href: `/collateral/${summary.concentration.slug}` }
+    : { label: "Largest concentration", value: "–", sub: "no live collateral" },
+];
+
+// 3. Coverage and governance
+const cov = summary.coverage;
+const coverageKpis = [
+  {
+    label: "Assessment coverage (live collaterals)",
+    value: `${cov.published} · ${cov.draft} · ${cov.missing}`,
+    sub: `published · under review · missing${cov.unavailable ? ` (+${cov.unavailable} temporarily unavailable)` : ""}`,
+    href: cov.missing ? "/attention#live" : "#collaterals",
+    tooltip: "Published = formally published assessment; under review = draft exists; missing = no assessment record at all",
+  },
+  { label: "Assessment review queue", value: String(att.review.items), sub: att.review.items ? `${att.review.parameterDifferences} draft-proposal difference${att.review.parameterDifferences === 1 ? "" : "s"} · ${att.review.collaterals} collateral${att.review.collaterals === 1 ? "" : "s"} · view →` : "nothing to review", href: "/attention#review" },
+  { label: "Lifecycle", value: `${summary.lifecycle.live} live`, sub: `${summary.lifecycle.proposed} proposed · ${summary.lifecycle.draft} draft · ${summary.lifecycle.closed} closed · ${summary.lifecycle.denied} denied`, href: "#collaterals" },
+  { label: "Assessments in repository", value: String(summary.assessments.published + summary.assessments.draft + summary.assessments.deprecated), sub: `${summary.assessments.published} published · ${summary.assessments.draft} draft · ${summary.assessments.deprecated} deprecated`, href: "https://github.com/Frankencoin-ZCHF/frankencoin-collateral-assessments" },
 ];
 
 // Chart payloads
@@ -65,6 +90,11 @@ const valueSeries = {
 
 const protocolAt = set?.protocolFetchedAt ? formatDateTime(set.protocolFetchedAt) : null;
 const assessmentsAt = set?.assessmentsFetchedAt ? formatDateTime(set.assessmentsFetchedAt) : null;
+const chipGroups: { key: string; label: string; aria: string; chips: [string, string][] }[] = [
+  { key: "lifecycle", label: "Lifecycle", aria: "Lifecycle", chips: [["all", "All"], ["live", "Live"], ["proposed", "Proposed"], ["draft", "Draft"], ["closed", "Closed"], ["denied", "Denied"]] },
+  { key: "status", label: "Assessment", aria: "Assessment stage", chips: [["all", "All"], ["published", "Published"], ["draft", "Draft"], ["deprecated", "Deprecated"], ["none", "None"]] },
+  { key: "class", label: "Free float", aria: "Free-float class", chips: [["all", "Any"], ["strong", "Strong"], ["sufficient", "Sufficient"], ["insufficient", "Insufficient"]] },
+];
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 ---
 
@@ -76,12 +106,13 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
           <p class="ty-subtitle">FRANKENCOIN · COLLATERAL PLATFORM</p>
           <h1 class="ty-large-title">Collaterals</h1>
           <p class="ty-body-1 text-[var(--color-neutral-650)] mt-2">
-            Collateral assessments published by their named authors, with live protocol data, version history and community discussion — and the collateral's lifecycle shown separately from the stage of its assessment.
+            Live risk first, then exposure, then assessment coverage. Collateral assessments are published by their named authors; the collateral's lifecycle is shown separately from the stage of its assessment.
           </p>
         </div>
-        <div class="flex gap-3 shrink-0">
+        <div class="flex flex-wrap gap-3 shrink-0">
+          <Button href="/attention#live" variant="primary" rounded="full" size="sm">{calm ? "Monitor collaterals" : `View live risks (${att.live.items})`}</Button>
           <Button href="/framework" variant="secondary" size="sm">Risk framework</Button>
-          <Button href={ui.nav.links.find((l) => l.label === "Discussions")!.href} variant="primary" rounded="full" size="sm" external withExternalIcon>Propose a collateral</Button>
+          <Button href={ui.nav.links.find((l) => l.label === "Discussions")!.href} variant="secondary" size="sm" external withExternalIcon>Propose a collateral</Button>
         </div>
       </div>
 
@@ -89,12 +120,19 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
       {!set && <Unavailable message="Neither the assessments repository nor the protocol API could be reached. Try again in a minute." />}
 
       <div>
-        <p class="fc-card-title mb-2">Collateral lifecycle · assessment stage</p>
-        <StatsContainer options={lifecycleKpis} cols={6} />
+        <div class="flex items-baseline gap-2 mb-2">
+          <p class="fc-card-title">1 · Protocol risk now</p>
+          <span class={`fc-pill ${calm ? "fc-pill-strong" : att.live.high ? "fc-pill-insufficient" : "fc-pill-sufficient"}`}>{calm ? "calm" : att.live.high ? "action needed" : "watch"}</span>
+        </div>
+        <StatsContainer options={riskKpis} cols={4} />
       </div>
       <div>
-        <p class="fc-card-title mb-2">Exposure and risk</p>
+        <p class="fc-card-title mb-2">2 · Exposure</p>
         <StatsContainer options={exposureKpis} cols={4} />
+      </div>
+      <div>
+        <p class="fc-card-title mb-2">3 · Assessment coverage and governance</p>
+        <StatsContainer options={coverageKpis} cols={4} />
       </div>
       <p class="ty-2xs text-[var(--color-gray-60)]">
         Live protocol state fetched {protocolAt ?? "–"} (api.frankencoin.com, refreshes every minute)
@@ -106,16 +144,15 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
   {
     rows.length > 0 && (
       <Section pad="xxs" width="wide" id="dashboard">
+        <p class="fc-card-title mb-2">4 · Explore</p>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div class="contents">
-            <div class="fc-card p-4">
-              <p class="fc-card-title mb-2">Minted ZCHF per collateral <span class="normal-case tracking-normal text-[var(--color-gray-60)]">· click a bar to open the collateral</span></p>
-              <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-64" />
-            </div>
-            <div class="fc-card p-4">
-              <p class="fc-card-title mb-2">Oracle-valued collateral share</p>
-              <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-64" />
-            </div>
+          <div class="fc-card p-4">
+            <p class="fc-card-title mb-2">Minted ZCHF per collateral <span class="normal-case tracking-normal text-[var(--color-gray-60)]">· click a bar to open the collateral</span></p>
+            <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-64" />
+          </div>
+          <div class="fc-card p-4">
+            <p class="fc-card-title mb-2">Oracle-valued collateral share <span class="normal-case tracking-normal text-[var(--color-gray-60)]">· collateral quantity × oracle price</span></p>
+            <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-64" />
           </div>
         </div>
       </Section>
@@ -127,7 +164,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
       <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
         <div>
           <h2 class="ty-title-1">All collaterals</h2>
-          <p class="ty-small text-[var(--color-gray-75)]"><span id="grid-count">{rows.length}</span> shown · one row per contract address</p>
+          <p class="ty-small text-[var(--color-gray-75)]"><span id="grid-count">{rows.length}</span> shown · one row per contract address · specialist columns are behind “Columns”</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
           <input id="grid-search" type="search" placeholder="Search…" aria-label="Search collaterals" class="h-9 rounded-full border border-[var(--color-gray-30)] px-4 ty-small w-48 focus:outline-none focus:border-[var(--color-brand-swiss)]" />
@@ -140,24 +177,20 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
         </div>
       </div>
 
-      <div class="flex flex-col gap-2" role="group" aria-label="Filters">
-        <div class="flex flex-wrap gap-2 items-center">
-          <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] w-24">Lifecycle</span>
-          {[["lifecycle:all", "All"], ["lifecycle:live", "Live"], ["lifecycle:proposed", "Proposed"], ["lifecycle:draft", "Draft"], ["lifecycle:closed", "Closed"], ["lifecycle:denied", "Denied"]].map(([chip, label]) => (
-            <button type="button" data-chip={chip} aria-pressed={chip === "lifecycle:all"} class="chip">{label}</button>
-          ))}
-        </div>
-        <div class="flex flex-wrap gap-2 items-center">
-          <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] w-24">Assessment</span>
-          {[["status:all", "All"], ["status:published", "Published"], ["status:draft", "Draft"], ["status:deprecated", "Deprecated"], ["status:none", "None"]].map(([chip, label]) => (
-            <button type="button" data-chip={chip} aria-pressed={chip === "status:all"} class="chip">{label}</button>
-          ))}
-          <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] ml-3 mr-1">Free float</span>
-          {[["class:all", "Any"], ["class:strong", "Strong"], ["class:sufficient", "Sufficient"], ["class:insufficient", "Insufficient"]].map(([chip, label]) => (
-            <button type="button" data-chip={chip} aria-pressed={chip === "class:all"} class="chip">{label}</button>
-          ))}
-          <button type="button" data-chip="issues:toggle" aria-pressed="false" class="chip ml-3">Needs attention only</button>
-        </div>
+      <div class="flex flex-col gap-2" aria-label="Filters">
+        {
+          chipGroups.map((g) => (
+            <div class="flex flex-wrap gap-2 items-center" role="group" aria-label={g.aria}>
+              <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] w-24" aria-hidden="true">{g.label}</span>
+              {g.chips.map(([value, label]) => (
+                <button type="button" data-chip={`${g.key}:${value}`} aria-pressed={value === "all"} aria-label={`${g.aria}: ${label}`} class="chip">{label}</button>
+              ))}
+              {g.key === "class" && (
+                <button type="button" data-chip="issues:toggle" aria-pressed="false" aria-label="Show only collaterals with live risk items" class="chip ml-3">Live risk only</button>
+              )}
+            </div>
+          ))
+        }
       </div>
 
       <script is:inline type="application/json" id="grid-data" set:html={jsonForScript(rows)} />
