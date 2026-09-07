@@ -22,6 +22,8 @@ export interface SeriesPayload {
   series?: { name: string; values: number[] }[];
   unit?: string;
   name?: string;
+  /** Optional per-label link targets (same order as labels); clicking a data point navigates there. */
+  links?: (string | null)[];
 }
 
 function fmt(v: number, unit?: string): string {
@@ -97,6 +99,15 @@ export function mountCharts(root: ParentNode = document) {
     el.dataset.mounted = "1";
     const chart = init(el, undefined, { renderer: "canvas" });
     chart.setOption(build(el.dataset.chart ?? "bar", payload));
+    if (payload.links?.some(Boolean)) {
+      chart.on("click", (params) => {
+        const url = payload.links?.[params.dataIndex];
+        if (url) window.location.href = url;
+      });
+      chart.on("mouseover", (params) => {
+        chart.getZr().setCursorStyle(payload.links?.[params.dataIndex] ? "pointer" : "default");
+      });
+    }
     const ro = new ResizeObserver(() => chart.resize());
     ro.observe(el);
   });

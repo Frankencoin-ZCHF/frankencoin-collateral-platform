@@ -51,13 +51,15 @@ const exposureKpis = [
 
 // Chart payloads
 const withMint = rows.filter((r) => (r.mintedZchf ?? 0) > 0).sort((a, b) => (b.mintedZchf ?? 0) - (a.mintedZchf ?? 0));
-const mintedSeries = { labels: withMint.slice(0, 14).map((r) => r.ticker), values: withMint.slice(0, 14).map((r) => r.mintedZchf ?? 0), unit: "ZCHF", name: "Minted ZCHF" };
+const mintedTop = withMint.slice(0, 14);
+const mintedSeries = { labels: mintedTop.map((r) => r.ticker), values: mintedTop.map((r) => r.mintedZchf ?? 0), links: mintedTop.map((r) => r.url), unit: "ZCHF", name: "Minted ZCHF" };
 const valueRows = rows.filter((r) => (r.collateralValueChf ?? 0) > 0).sort((a, b) => (b.collateralValueChf ?? 0) - (a.collateralValueChf ?? 0));
 const top = valueRows.slice(0, 8);
 const rest = valueRows.slice(8).reduce((n, r) => n + (r.collateralValueChf ?? 0), 0);
 const valueSeries = {
   labels: [...top.map((r) => r.ticker), ...(rest > 0 ? ["Other"] : [])],
   values: [...top.map((r) => r.collateralValueChf ?? 0), ...(rest > 0 ? [rest] : [])],
+  links: [...top.map((r) => r.url), ...(rest > 0 ? [null] : [])],
   unit: "CHF",
 };
 
@@ -107,7 +109,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div class="contents">
             <div class="fc-card p-4">
-              <p class="fc-card-title mb-2">Minted ZCHF per collateral</p>
+              <p class="fc-card-title mb-2">Minted ZCHF per collateral <span class="normal-case tracking-normal text-[var(--color-gray-60)]">· click a bar to open the collateral</span></p>
               <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-64" />
             </div>
             <div class="fc-card p-4">

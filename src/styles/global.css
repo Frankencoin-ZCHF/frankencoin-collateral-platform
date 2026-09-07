@@ -60,8 +60,15 @@
   }
   /* Pills for classifications / statuses */
   .fc-pill {
-    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 font-bold uppercase tracking-wide whitespace-nowrap;
-    font-size: var(--font-size-xs);
+    @apply inline-flex items-center gap-1 rounded-full px-2 font-bold uppercase tracking-wide whitespace-nowrap align-middle;
+    font-size: 11px;
+    line-height: 1.2; /* do not inherit a table cell's row line-height */
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+  /* Inside AG Grid cells, keep pills vertically centred with air around them. */
+  .ag-cell .fc-pill {
+    margin: 0 2px;
   }
   .fc-pill-strong { @apply bg-emerald-100 text-emerald-800; }
   .fc-pill-sufficient { @apply bg-amber-100 text-amber-800; }
