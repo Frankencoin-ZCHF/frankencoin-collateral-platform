@@ -8,6 +8,7 @@
 - Detail page per collateral: https://collateral.frankencoin.com/collateral/<ticker> (e.g. /collateral/wsteth, /collateral/wbtc)
 - Historical version of an assessment: /collateral/<ticker>?v=<commit-sha>
 - Diff between two versions: /collateral/<ticker>/compare?from=<sha>&to=<sha>
+- Items requiring attention (integrity issues, deviations, debt near liquidation): https://collateral.frankencoin.com/attention
 - Risk assessment methodology: https://collateral.frankencoin.com/framework
 
 ## Machine-readable

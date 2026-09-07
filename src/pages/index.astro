@@ -5,7 +5,6 @@ import StatsContainer from "@/components/StatsContainer/StatsContainer.astro";
 import CollateralTable from "@/components/CollateralTable.astro";
 import Unavailable from "@/components/Unavailable.astro";
 import Button from "@/components/Button/Button.astro";
-import Pill from "@/components/Pill.astro";
 import ui from "@/content/ui.json";
 import * as collaterals from "@/services/collaterals";
 import { attentionGroups } from "@/services/attention";
@@ -28,7 +27,7 @@ const rows = records.map(toRow);
 const summary = collaterals.summarize(records);
 const attention = attentionGroups(records);
 const attentionCount = attention.reduce((n, g) => n + g.items.length, 0);
-const SEV_BAR: Record<string, string> = { high: "bg-red-500", medium: "bg-amber-400", low: "bg-[var(--color-neutral-300)]" };
+const attentionHigh = attention.reduce((n, g) => n + g.items.filter((i) => i.severity === "high").length, 0);
 
 const lifecycleKpis = [
   { label: "Live collaterals", value: String(summary.lifecycle.live), sub: "with open positions", href: "#collaterals" },
@@ -36,13 +35,18 @@ const lifecycleKpis = [
   { label: "Draft", value: String(summary.lifecycle.draft), sub: "assessment only, not on-chain" },
   { label: "Closed / denied", value: String(summary.lifecycle.closed + summary.lifecycle.denied), sub: `${summary.lifecycle.closed} closed · ${summary.lifecycle.denied} denied` },
   { label: "Published assessments", value: String(summary.assessments.published), sub: `${summary.assessments.draft} draft · ${summary.assessments.deprecated} deprecated` },
-  { label: "Live without published assessment", value: String(summary.liveWithoutPublished), sub: summary.liveWithoutPublished ? "review coverage gap" : "full coverage", href: "#attention" },
+  { label: "Live without published assessment", value: String(summary.liveWithoutPublished), sub: summary.liveWithoutPublished ? "review coverage gap" : "full coverage", href: "/attention" },
 ];
 const exposureKpis = [
   { label: "Minted ZCHF against live collateral", value: formatCompact(summary.totalMintedZchf), sub: `${formatNumber(summary.activePositions, 0)} open positions` },
   { label: "Oracle-valued collateral", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "locked in open positions" },
-  { label: "Debt within 10 % of liquidation", value: formatCompact(summary.debtWithin10Pct), unit: "ZCHF", sub: summary.debtWithin10Pct > 0 ? "requires attention" : "none at the current oracle price", href: "#attention" },
-  { label: "Integrity issues", value: String(summary.integrityIssues), sub: summary.integrityIssues ? "see items requiring attention" : "no open issues", href: "#attention" },
+  { label: "Debt within 10 % of liquidation", value: formatCompact(summary.debtWithin10Pct), unit: "ZCHF", sub: summary.debtWithin10Pct > 0 ? "requires attention" : "none at the current oracle price", href: "/attention" },
+  {
+    label: "Items requiring attention",
+    value: String(attentionCount),
+    sub: attentionCount ? `${attentionHigh ? attentionHigh + " high · " : ""}${attention.length} collateral${attention.length === 1 ? "" : "s"} · view all →` : "nothing at current prices",
+    href: "/attention",
+  },
 ];
 
 // Chart payloads
@@ -75,7 +79,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
         </div>
         <div class="flex gap-3 shrink-0">
           <Button href="/framework" variant="secondary" size="sm">Risk framework</Button>
-          <Button href={ui.nav.links[2]!.href} variant="primary" rounded="full" size="sm" external withExternalIcon>Propose a collateral</Button>
+          <Button href={ui.nav.links.find((l) => l.label === "Discussions")!.href} variant="primary" rounded="full" size="sm" external withExternalIcon>Propose a collateral</Button>
         </div>
       </div>
 
@@ -100,69 +104,15 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
   {
     rows.length > 0 && (
       <Section pad="xxs" width="wide" id="dashboard">
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div class="fc-card p-5 lg:col-span-2 self-start" id="attention" x-data="{ open: false, toggleAll() { this.open = !this.open; $el.querySelectorAll('details').forEach(d => d.open = this.open) } }">
-            <div class="flex items-baseline justify-between gap-3 mb-1">
-              <p class="fc-card-title">Items requiring attention</p>
-              <span class="ty-2xs text-[var(--color-gray-60)]">{attentionCount} item{attentionCount === 1 ? "" : "s"} across {attention.length} collateral{attention.length === 1 ? "" : "s"}</span>
-            </div>
-            <div class="flex items-baseline justify-between gap-3 mb-3">
-              <p class="ty-2xs text-[var(--color-gray-60)]">Integrity issues, live parameters that deviate from the assessment in the less conservative direction, debt close to liquidation, running challenges. Click a row for details.</p>
-              {attention.length > 0 && (
-                <button type="button" class="ty-2xs font-bold whitespace-nowrap text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)]" @click="toggleAll()" x-text="open ? 'Collapse all' : 'Expand all'">Expand all</button>
-              )}
-            </div>
-            {attention.length === 0 ? (
-              <p class="ty-small text-[var(--color-gray-75)]">Nothing requires attention at the current oracle prices.</p>
-            ) : (
-              <ul class="flex flex-col divide-y divide-[var(--color-gray-20)]">
-                {attention.map((g) => (
-                  <li>
-                    <details class="group">
-                      <summary class="list-none cursor-pointer flex items-center gap-3 py-2 -mx-2 px-2 rounded-md hover:bg-[var(--color-gray-10)]">
-                        <span class={`h-5 w-1 shrink-0 rounded-full ${SEV_BAR[g.severity]}`} aria-label={`${g.severity} severity`} />
-                        <a href={`/collateral/${g.slug}`} class="ty-small font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)] w-16 shrink-0" @click.stop>{g.ticker}</a>
-                        <span class="hidden md:flex items-center gap-1 shrink-0">
-                          <Pill value={g.lifecycle} class="!text-[10px] !py-0" />
-                          <Pill value={g.assessmentStatus === "none" ? "no assessment" : g.assessmentStatus} kind={g.assessmentStatus} class="!text-[10px] !py-0" />
-                        </span>
-                        <span class="ty-xs text-[var(--color-neutral-650)] truncate min-w-0 flex-1">
-                          {g.items.map((it) => it.title.replace(/ differs from assessment$/, "")).join(" · ")}
-                        </span>
-                        <span class="ty-2xs text-[var(--color-gray-60)] shrink-0 tabular-nums">{g.items.length}</span>
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-[var(--color-gray-60)] transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
-                      </summary>
-                      <ul class="pl-4 md:pl-[5.5rem] pb-3 flex flex-col gap-1.5">
-                        {g.items.map((it) => (
-                          <li>
-                            <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
-                              <span class={`ty-small font-bold ${it.severity === "high" ? "text-red-800" : "text-[var(--color-neutral-700)]"}`}>{it.title}</span>
-                              {(it.assessed || it.live) && (
-                                <span class="ty-xs tabular-nums whitespace-nowrap text-[var(--color-neutral-650)]">
-                                  {it.assessed && <><span class="text-[var(--color-gray-60)]">assessed </span>{it.assessed}</>}
-                                  {it.assessed && it.live && <span class="text-[var(--color-gray-60)]"> → </span>}
-                                  {it.live && <><span class="text-[var(--color-gray-60)]">live </span>{it.live}</>}
-                                </span>
-                              )}
-                            </div>
-                            <p class="ty-xs text-[var(--color-gray-75)] leading-snug">{it.detail}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div class="flex flex-col gap-4">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="contents">
             <div class="fc-card p-4">
               <p class="fc-card-title mb-2">Minted ZCHF per collateral</p>
-              <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-52" />
+              <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-64" />
             </div>
             <div class="fc-card p-4">
               <p class="fc-card-title mb-2">Oracle-valued collateral share</p>
-              <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-52" />
+              <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-64" />
             </div>
           </div>
         </div>

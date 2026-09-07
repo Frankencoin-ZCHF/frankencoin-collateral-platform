@@ -1,0 +1,53 @@
+---
+import Base from "@/layouts/Base.astro";
+import Section from "@/components/Layout/Section.astro";
+import AttentionList from "@/components/AttentionList.astro";
+import Unavailable from "@/components/Unavailable.astro";
+import Button from "@/components/Button/Button.astro";
+import * as collaterals from "@/services/collaterals";
+import { attentionGroups } from "@/services/attention";
+import { describeForLog } from "@/lib/errors";
+import { formatDateTime } from "@/lib/numbers";
+
+export const prerender = false;
+
+let set: Awaited<ReturnType<typeof collaterals.all>> | null = null;
+try {
+  set = await collaterals.all();
+} catch (e) {
+  console.error(`[attention] ${describeForLog(e)}`);
+}
+const groups = attentionGroups(set?.records ?? []);
+const total = groups.reduce((n, g) => n + g.items.length, 0);
+const high = groups.reduce((n, g) => n + g.items.filter((i) => i.severity === "high").length, 0);
+
+Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
+---
+
+<Base title="Items requiring attention" description="Integrity issues, live parameters deviating from their assessment, debt close to liquidation and running challenges across all Frankencoin collaterals.">
+  <Section variant="accent" pad="xs" width="wide">
+    <nav class="ty-xs text-[var(--color-gray-75)] mb-3" aria-label="Breadcrumb">
+      <a href="/" class="hover:underline">Collaterals</a> › Attention
+    </nav>
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div class="max-w-3xl">
+        <h1 class="ty-large-title">Items requiring attention</h1>
+        <p class="ty-body-2 text-[var(--color-neutral-650)] mt-2">
+          {total} item{total === 1 ? "" : "s"} across {groups.length} collateral{groups.length === 1 ? "" : "s"}{high > 0 && <> · <span class="text-red-800 font-bold">{high} high severity</span></>}.
+          Integrity issues, live parameters that deviate from the assessment in the less conservative direction, debt close to liquidation, and running challenges. Click a row for details.
+        </p>
+      </div>
+      <Button href="/" variant="secondary" size="sm">All collaterals</Button>
+    </div>
+    {set?.warnings.map((w) => <div class="mt-4"><Unavailable message={w} compact /></div>)}
+  </Section>
+
+  <Section pad="xs" width="wide">
+    <div class="fc-card p-5">
+      <AttentionList groups={groups} />
+    </div>
+    <p class="ty-2xs text-[var(--color-gray-60)] mt-3">
+      Live protocol state fetched {formatDateTime(set?.protocolFetchedAt ?? null)} · assessments at commit <span class="font-mono">{set?.assessmentsHead?.shortSha ?? "–"}</span>. Severity: red = integrity or imminent liquidation risk, amber = deviation worth a look.
+    </p>
+  </Section>
+</Base>
