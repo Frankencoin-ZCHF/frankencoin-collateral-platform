@@ -3,205 +3,288 @@ import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
 import StatsContainer from "@/components/StatsContainer/StatsContainer.astro";
 import CollateralTable from "@/components/CollateralTable.astro";
-import Unavailable from "@/components/Unavailable.astro";
 import Button from "@/components/Button/Button.astro";
-import ui from "@/content/ui.json";
 import * as collaterals from "@/services/collaterals";
 import { summarizeAttention } from "@/services/attention";
+import { exposureGroups, monitoringCoverage } from "@/services/monitoring";
 import { toRow } from "@/lib/rows";
+import { collateralView, matchesFilters } from "@/lib/collateral-filters";
 import { jsonForScript } from "@/lib/html";
-import { formatCompact, formatDateTime, formatNumber, formatPercent } from "@/lib/numbers";
+import { formatCompact, formatDateTime, formatPercent } from "@/lib/numbers";
 import { describeForLog } from "@/lib/errors";
-
+import { config } from "@/config";
 export const prerender = false;
-
 let set: Awaited<ReturnType<typeof collaterals.all>> | null = null;
 try {
   set = await collaterals.all();
 } catch (e) {
   console.error(`[index] ${describeForLog(e)}`);
 }
-
 const records = set?.records ?? [];
-const rows = records.map(toRow);
 const summary = collaterals.summarize(records);
-const att = summarizeAttention(records);
-const calm = att.live.items === 0;
-
-// 1. Protocol risk now
-const riskKpis = [
+const coverage = monitoringCoverage(records);
+const att = summarizeAttention(records, set?.unattributedActiveChallenges ?? 0);
+const rows = records.map((r) => toRow(r, summary.totalMintedZchf));
+const groups = exposureGroups(records);
+const view = collateralView(Astro.url.searchParams.get("view"));
+const query = Astro.url.searchParams.get("q") ?? "";
+const groupOptions = [...new Set(rows.map((r) => r.exposureGroup))].sort();
+const requestedGroup = Astro.url.searchParams.get("group");
+const group = requestedGroup && groupOptions.includes(requestedGroup) ? requestedGroup : "all";
+const visibleCount = rows.filter((r) => matchesFilters(r, view, query, group)).length;
+const protocolAvailable = Boolean(set?.protocolFetchedAt);
+const challengeAvailable = protocolAvailable && !set?.protocolDegraded.some((s) => s === "all" || /challenge/i.test(s));
+const kpis = [
   {
-    label: "Live risk now",
-    value: String(att.live.items),
-    sub: calm ? "nothing at the current oracle price" : `${att.live.high ? att.live.high + " high · " : ""}${att.live.collaterals} collateral${att.live.collaterals === 1 ? "" : "s"} · view live-risk queue →`,
-    href: "/attention#live",
-    tooltip: "Active challenges, debt close to liquidation, stale or divergent data, integrity exceptions",
-  },
-  { label: "Active challenges", value: String(att.live.challenges), sub: att.live.challenges ? "liquidation auctions running" : "no auctions running", href: att.live.challenges ? "/attention#live" : "https://app.frankencoin.com/challenges" },
-  {
-    label: "Debt within 10 % of liquidation",
-    value: formatCompact(att.live.debtWithin10Pct),
+    label: "Outstanding ZCHF exposure",
+    value: protocolAvailable ? formatCompact(summary.totalMintedZchf) : "–",
     unit: "ZCHF",
-    sub: att.live.debtWithin10Pct > 0 ? "a 10 % price drop would make it challengeable" : "none at the current oracle price",
-    href: "/attention#live",
-    tooltip: "ZCHF minted in positions whose liquidation price is within 10 % of the current oracle price",
+    sub: `${formatCompact(summary.bridgeMintedZchf)} through 1:1 bridges · the remainder through collateralised borrowing`,
   },
-  { label: "Data-integrity exceptions", value: String(att.live.integrity), sub: att.live.integrity ? "source divergence, address mismatch, missing assessment" : "sources agree", href: "/attention#live" },
-];
-
-// 2. Exposure
-const exposureKpis = [
-  { label: "Minted ZCHF", value: formatCompact(summary.totalMintedZchf), sub: `${formatNumber(summary.activePositions, 0)} open positions · ${formatCompact(summary.bridgeMintedZchf)} of it via ${summary.liveBridges} live 1:1 bridge${summary.liveBridges === 1 ? "" : "s"} (no collateral buffer)` },
-  { label: "Oracle-valued collateral", value: formatCompact(summary.totalCollateralValueChf), unit: "CHF", sub: "collateral quantity × current oracle price", tooltip: "Collateral quantity × current protocol oracle price, summed over open positions" },
-  { label: "Remaining aggregate limit", value: formatCompact(summary.totalRemainingLimitZchf), unit: "ZCHF", sub: "additional ZCHF mintable under current limits", tooltip: "Sum over collaterals of total limit − minted" },
-  summary.concentration
-    ? { label: "Largest concentration", value: formatPercent(summary.concentration.sharePct, 0), sub: `${summary.concentration.ticker} of all minted ZCHF`, href: `/collateral/${summary.concentration.slug}` }
-    : { label: "Largest concentration", value: "–", sub: "no live collateral" },
-];
-
-// 3. Coverage and governance
-const cov = summary.coverage;
-const coverageKpis = [
   {
-    label: "Assessment coverage (live collaterals)",
-    value: `${cov.published} · ${cov.draft} · ${cov.missing}`,
-    sub: `published · under review · missing${cov.unavailable ? ` (+${cov.unavailable} temporarily unavailable)` : ""}`,
-    href: cov.missing ? "/attention#live" : "#collaterals",
-    tooltip: "Published = formally published assessment; under review = draft exists; missing = no assessment record at all",
+    label: "Estimated backing value",
+    value: protocolAvailable ? formatCompact(coverage.backingValueChf) : "–",
+    unit: "CHF",
+    sub: `${coverage.valuedAssets} of ${coverage.exposedAssets} assets valued · check source freshness below`,
   },
-  { label: "Assessment review queue", value: String(att.review.items), sub: att.review.items ? `${att.review.parameterDifferences} draft-proposal difference${att.review.parameterDifferences === 1 ? "" : "s"} · ${att.review.collaterals} collateral${att.review.collaterals === 1 ? "" : "s"} · view →` : "nothing to review", href: "/attention#review" },
-  { label: "Lifecycle", value: `${summary.lifecycle.live} live`, sub: `${summary.lifecycle.proposed} proposed · ${summary.lifecycle.draft} draft · ${summary.lifecycle.closed} closed · ${summary.lifecycle.denied} denied`, href: "#collaterals" },
-  { label: "Assessments in repository", value: String(summary.assessments.published + summary.assessments.draft + summary.assessments.deprecated), sub: `${summary.assessments.published} published · ${summary.assessments.draft} draft · ${summary.assessments.deprecated} deprecated`, href: "https://github.com/Frankencoin-ZCHF/frankencoin-collateral-assessments" },
+  {
+    label: "Active challenges",
+    value: challengeAvailable ? String(att.live.challenges) : "–",
+    sub: challengeAvailable ? "Observed in the current snapshot · view financial monitoring →" : "Challenge monitoring unavailable",
+    href: "/attention#live",
+  },
 ];
-
-// Chart payloads
-const withMint = rows.filter((r) => (r.mintedZchf ?? 0) > 0).sort((a, b) => (b.mintedZchf ?? 0) - (a.mintedZchf ?? 0));
-const mintedTop = withMint.slice(0, 14);
-const mintedSeries = { labels: mintedTop.map((r) => r.ticker), values: mintedTop.map((r) => r.mintedZchf ?? 0), links: mintedTop.map((r) => r.url), unit: "ZCHF", name: "Minted ZCHF" };
-const valueRows = rows.filter((r) => (r.collateralValueChf ?? 0) > 0).sort((a, b) => (b.collateralValueChf ?? 0) - (a.collateralValueChf ?? 0));
-const top = valueRows.slice(0, 8);
-const rest = valueRows.slice(8).reduce((n, r) => n + (r.collateralValueChf ?? 0), 0);
-const valueSeries = {
-  labels: [...top.map((r) => r.ticker), ...(rest > 0 ? ["Other"] : [])],
-  values: [...top.map((r) => r.collateralValueChf ?? 0), ...(rest > 0 ? [rest] : [])],
-  links: [...top.map((r) => r.url), ...(rest > 0 ? [null] : [])],
-  unit: "CHF",
-};
-
-const protocolAt = set?.protocolFetchedAt ? formatDateTime(set.protocolFetchedAt) : null;
-const assessmentsAt = set?.assessmentsFetchedAt ? formatDateTime(set.assessmentsFetchedAt) : null;
-const chipGroups: { key: string; label: string; aria: string; chips: [string, string][] }[] = [
-  { key: "lifecycle", label: "Lifecycle", aria: "Lifecycle", chips: [["all", "All"], ["live", "Live"], ["proposed", "Proposed"], ["draft", "Draft"], ["closed", "Closed"], ["denied", "Denied"]] },
-  { key: "status", label: "Assessment", aria: "Assessment stage", chips: [["all", "All"], ["published", "Published"], ["draft", "Draft"], ["deprecated", "Deprecated"], ["none", "None"]] },
-  { key: "class", label: "Free float", aria: "Free-float class", chips: [["all", "Any"], ["strong", "Strong"], ["sufficient", "Sufficient"], ["insufficient", "Insufficient"]] },
+const views = [
+  ["current", "Current backing"],
+  ["proposals", "Proposals & unused"],
+  ["archive", "Archive"],
+  ["all", "All assets"],
 ];
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 ---
 
 <Base>
   <Section variant="accent" pad="xs" width="wide" id="top">
-    <div class="flex flex-col gap-6">
+    <div class="flex flex-col gap-5">
       <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div class="max-w-3xl">
-          <p class="ty-subtitle">FRANKENCOIN · COLLATERAL PLATFORM</p>
-          <h1 class="ty-large-title">Collaterals</h1>
-          <p class="ty-body-1 text-[var(--color-neutral-650)] mt-2">
-            Live risk first, then exposure, then assessment coverage. Collateral assessments are published by their named authors; the collateral's lifecycle is shown separately from the stage of its assessment.
+          <p class="ty-subtitle">FRANKENCOIN · COLLATERAL PLATFORM</p><h1 class="ty-large-title">What backs Frankencoin?</h1><p
+            class="ty-body-2 mt-2 text-[var(--color-neutral-650)]"
+          >
+            Explore the assets backing ZCHF, the exposure to each asset, and the findings in their risk assessments.
           </p>
         </div>
-        <div class="flex flex-wrap gap-3 shrink-0">
-          <Button href="/attention#live" variant="primary" rounded="full" size="sm">{calm ? "Monitor collaterals" : `View live risks (${att.live.items})`}</Button>
-          <Button href="/framework" variant="secondary" size="sm">Risk framework</Button>
-          <Button href={ui.nav.links.find((l) => l.label === "Discussions")!.href} variant="secondary" size="sm" external withExternalIcon>Propose a collateral</Button>
-        </div>
+        <Button href="/attention" variant="secondary" size="sm">Monitoring & review</Button>
       </div>
-
-      {set?.warnings.map((w) => <Unavailable message={w} compact />)}
-      {!set && <Unavailable message="Neither the assessments repository nor the protocol API could be reached. Try again in a minute." />}
-
-      <div>
-        <div class="flex items-baseline gap-2 mb-2">
-          <p class="fc-card-title">1 · Protocol risk now</p>
-          <span class={`fc-pill ${calm ? "fc-pill-strong" : att.live.high ? "fc-pill-insufficient" : "fc-pill-sufficient"}`}>{calm ? "calm" : att.live.high ? "action needed" : "watch"}</span>
-        </div>
-        <StatsContainer options={riskKpis} cols={4} />
-      </div>
-      <div>
-        <p class="fc-card-title mb-2">2 · Exposure</p>
-        <StatsContainer options={exposureKpis} cols={4} />
-      </div>
-      <div>
-        <p class="fc-card-title mb-2">3 · Assessment coverage and governance</p>
-        <StatsContainer options={coverageKpis} cols={4} />
-      </div>
-      <p class="ty-2xs text-[var(--color-gray-60)]">
-        Live protocol state fetched {protocolAt ?? "–"} (api.frankencoin.com, refreshes every minute)
-        {set?.assessmentsHead && <> · assessment snapshot at commit <a class="underline font-mono" href={`https://github.com/${set.assessmentsHead.url.split("/").slice(3, 5).join("/")}/commit/${set.assessmentsHead.sha}`} target="_blank" rel="noopener noreferrer">{set.assessmentsHead.shortSha}</a> ({formatDateTime(set.assessmentsHead.date)}), read {assessmentsAt}</>}
+      {
+        config.protocolFixturesDir && (
+          <p class="fc-notice">
+            Sample protocol snapshot. These figures are provided for demonstration and are not the current protocol state.
+          </p>
+        )
+      }
+      {
+        !protocolAvailable && (
+          <p class="fc-notice" role="status">
+            Protocol data could not be loaded. Exposure and monitoring figures are unavailable.
+          </p>
+        )
+      }
+      <StatsContainer options={kpis} cols={3} />
+      <p class="ty-small text-[var(--color-neutral-650)]">
+        Exposure means outstanding issuance through the facilities shown here. It is not circulating ZCHF supply. Estimated backing is the
+        reported collateral and bridge-token value; this page is not a complete protocol balance sheet.
       </p>
+      <div class="fc-monitoring-strip">
+        <p>
+          {
+            coverage.incompleteAssets > 0 || set?.protocolDegraded.length ? (
+              <>
+                <strong>Price-based monitoring is incomplete.</strong> {formatPercent(coverage.sharePct, 1)} of reported exposure has
+                current reference prices and reconciled position data.{" "}
+                <a href="/attention#data" class="underline">
+                  Review data quality →
+                </a>
+              </>
+            ) : (
+              <>
+                <strong>Monitoring coverage:</strong> {formatPercent(coverage.sharePct, 1)} of reported exposure. No monitoring result
+                guarantees asset safety.
+              </>
+            )
+          }
+        </p>
+        <p>
+          {
+            coverage.monitoredDebt > 0
+              ? `${formatCompact(coverage.freshNearDebt)} ZCHF is within 10% of a liquidation price in the covered data.`
+              : "No exposure has complete price-based monitoring in this snapshot."
+          }
+          <a href="/attention#live" class="underline">View findings →</a>
+        </p>
+      </div>
+      <div class="flex flex-wrap gap-x-4 gap-y-2 items-center ty-small text-[var(--color-gray-75)]">
+        <span>Protocol data fetched {formatDateTime(set?.protocolFetchedAt)}</span><button
+          type="button"
+          x-data
+          @click="window.location.reload()"
+          class="underline">Refresh data</button
+        ><span>Source prices have their own observation times.</span>
+      </div>
     </div>
   </Section>
-
   {
-    rows.length > 0 && (
-      <Section pad="xxs" width="wide" id="dashboard">
-        <p class="fc-card-title mb-2">4 · Explore</p>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div class="fc-card p-4">
-            <p class="fc-card-title mb-2">Minted ZCHF per collateral <span class="normal-case tracking-normal text-[var(--color-gray-60)]">· click a bar to open the collateral</span></p>
-            <div data-chart="bar" data-series={JSON.stringify(mintedSeries)} class="h-64" />
-          </div>
-          <div class="fc-card p-4">
-            <p class="fc-card-title mb-2">Oracle-valued collateral share <span class="normal-case tracking-normal text-[var(--color-gray-60)]">· collateral quantity × oracle price</span></p>
-            <div data-chart="donut" data-series={JSON.stringify(valueSeries)} class="h-64" />
-          </div>
+    groups.length > 0 && (
+      <Section pad="xxs" width="wide">
+        <div class="fc-card p-4">
+          <>
+            <h2 class="ty-title-3 font-bold">Exposure by underlying asset</h2>
+            <p class="ty-small text-[var(--color-gray-75)] mt-1 mb-3">
+              Share of outstanding ZCHF represented here. Wrappers and issuers remain separate assets in the table.
+            </p>
+            <div class="fc-exposure-bar" aria-hidden="true">
+              {groups.map((g, i) => (
+                <span class={`fc-exposure-segment fc-series-${i % 6}`} style={`width:${g.sharePct}%`} />
+              ))}
+            </div>
+            <div class="fc-exposure-groups">
+              {groups.map((g, i) => (
+                <details>
+                  <summary>
+                    <span class={`fc-exposure-dot fc-series-${i % 6}`} aria-hidden="true" />
+                    <span>{g.label}</span>
+                    <strong>{formatPercent(g.sharePct, 1)}</strong>
+                  </summary>
+                  <ul>
+                    {g.assets.map((a) => (
+                      <li>
+                        <a href={`/collateral/${a.slug}`} class="underline">
+                          {a.ticker}
+                        </a>
+                        <span>{formatCompact(a.debt)} ZCHF</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              ))}
+            </div>
+          </>
         </div>
       </Section>
     )
   }
-
-  <Section pad="xs" width="wide" id="collaterals">
+  <Section pad="xxs" width="wide" id="collaterals">
     <div class="flex flex-col gap-4">
-      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-        <div>
-          <h2 class="ty-title-1">All collaterals</h2>
-          <p class="ty-small text-[var(--color-gray-75)]"><span id="grid-count">{rows.length}</span> shown · one row per contract address · specialist columns are behind “Columns”</p>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <input id="grid-search" type="search" placeholder="Search…" aria-label="Search collaterals" class="h-9 rounded-full border border-[var(--color-gray-30)] px-4 ty-small w-48 focus:outline-none focus:border-[var(--color-brand-swiss)]" />
-          <details class="relative">
-            <summary class="list-none h-9 inline-flex items-center px-4 rounded-full border border-[var(--color-gray-30)] ty-small cursor-pointer hover:bg-[var(--color-gray-10)]">Columns</summary>
-            <div id="grid-columns-menu" class="absolute right-0 z-30 mt-1 max-h-80 overflow-y-auto rounded-lg border border-[var(--color-gray-20)] bg-white shadow-lg py-1 min-w-52"></div>
-          </details>
-          <button id="grid-export" type="button" class="h-9 inline-flex items-center px-4 rounded-full border border-[var(--color-gray-30)] ty-small hover:bg-[var(--color-gray-10)]">{ui.buttons.exportCsv}</button>
-          <button id="grid-reset" type="button" class="h-9 inline-flex items-center px-4 rounded-full ty-small text-[var(--color-gray-75)] hover:text-[var(--color-brand-deep-blue)]">{ui.buttons.resetFilters}</button>
-        </div>
+      <div class="flex flex-wrap items-baseline justify-between gap-3">
+        <h2 class="ty-title-1">Explore the assets</h2><p
+          id="overview-count"
+          class="ty-small text-[var(--color-gray-75)]"
+          role="status"
+          aria-live="polite"
+        >
+          {visibleCount} assets
+        </p>
       </div>
-
-      <div class="flex flex-col gap-2" aria-label="Filters">
+      <nav class="fc-view-tabs" aria-label="Asset views">
         {
-          chipGroups.map((g) => (
-            <div class="flex flex-wrap gap-2 items-center" role="group" aria-label={g.aria}>
-              <span class="ty-xs uppercase tracking-wider text-[var(--color-gray-75)] w-24" aria-hidden="true">{g.label}</span>
-              {g.chips.map(([value, label]) => (
-                <button type="button" data-chip={`${g.key}:${value}`} aria-pressed={value === "all"} aria-label={`${g.aria}: ${label}`} class="chip">{label}</button>
-              ))}
-              {g.key === "class" && (
-                <button type="button" data-chip="issues:toggle" aria-pressed="false" aria-label="Show only collaterals with live risk items" class="chip ml-3">Live risk only</button>
-              )}
-            </div>
+          views.map(([value, label]) => (
+            <a href={`?view=${value}#collaterals`} data-overview-view={value} aria-current={view === value ? "page" : undefined}>
+              {label}
+            </a>
           ))
         }
-      </div>
-
+      </nav>
+      <form id="overview-form" method="get" class="flex flex-wrap gap-3 items-end">
+        <input type="hidden" name="view" value={view} /><label class="fc-field"
+          >Search assets<input
+            id="overview-search"
+            name="q"
+            type="search"
+            value={query}
+            placeholder="Name, ticker or contract address"
+          /></label
+        ><label class="fc-field"
+          >Underlying exposure<select id="overview-group" name="group"
+            ><option value="all">All groups</option>{
+              groupOptions.map((g) => (
+                <option value={g} selected={g === group}>
+                  {g}
+                </option>
+              ))
+            }</select
+          ></label
+        ><button type="submit" class="chip">Apply filters</button>
+      </form>
       <script is:inline type="application/json" id="grid-data" set:html={jsonForScript(rows)} />
-      <div id="collateral-grid" hidden class="w-full"></div>
-      <CollateralTable rows={rows} />
-      <noscript><p class="ty-xs text-[var(--color-gray-75)]">Enable JavaScript for sorting, filtering and CSV export.</p></noscript>
+      <CollateralTable rows={rows} view={view} query={query} group={group} />
+      <p id="overview-empty" hidden={visibleCount > 0} class="fc-notice">
+        No assets match these filters. Try another view or clear your search.
+      </p>
+      <p class="ty-small text-[var(--color-gray-75)]">
+        A price cushion is the distance from a reference market price to a configured liquidation price. Challenges and auctions determine
+        liquidation outcomes; displayed prices do not automatically liquidate positions.
+      </p>
+      <details id="advanced-grid" class="fc-card p-4">
+        <summary class="font-bold ty-small cursor-pointer">Advanced data & export</summary><p
+          class="ty-small mt-3 mb-3 text-[var(--color-gray-75)]"
+        >
+          All assets, including proposals and archived facilities. Choose additional parameters or export the full dataset.
+        </p><p id="advanced-grid-status" class="ty-small" role="status">Open this section to load the advanced table.</p><div
+          class="flex flex-wrap gap-2 items-center mb-3"
+        >
+          <input
+            disabled
+            id="grid-search"
+            type="search"
+            aria-label="Search advanced data"
+            placeholder="Search all data…"
+            class="fc-input"
+          /><details class="relative">
+            <summary class="chip cursor-pointer">Columns</summary><div
+              id="grid-columns-menu"
+              class="absolute right-0 z-30 mt-1 max-h-80 overflow-y-auto rounded-lg border border-[var(--color-gray-20)] bg-white shadow-lg py-1 min-w-52"
+            >
+            </div>
+          </details><button disabled id="grid-export" type="button" class="chip">Export CSV</button><button
+            disabled
+            id="grid-reset"
+            type="button"
+            class="chip">Reset filters</button
+          ><span id="grid-count" class="ty-small"></span>
+        </div><div id="collateral-grid" hidden class="w-full"></div><noscript
+          ><p>JavaScript is required for the advanced table. The asset overview above remains available.</p></noscript>
+      </details>
     </div>
   </Section>
+  <Section pad="xs" width="wide"
+    ><details class="fc-card p-5">
+      <summary class="ty-title-3 font-bold cursor-pointer">Assessment coverage & sources</summary><p class="ty-small mt-4">
+        Among currently live assets: {summary.coverage.published} published assessments, {summary.coverage.draft} drafts, {
+          summary.coverage.missing
+        } missing and {summary.coverage.unavailable} unavailable. Publication is independent of protocol use and does not establish governance
+        approval.
+      </p><div class="flex flex-wrap gap-4 mt-4 ty-small">
+        <a class="underline" href="/attention#review">Review assessment findings ({att.review.items})</a><a
+          class="underline"
+          href="/framework">Risk framework</a
+        ><a class="underline" href="https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals"
+          >Propose an asset ↗</a>
+      </div><p class="ty-small mt-4 text-[var(--color-gray-75)]">
+        Assessment snapshot {set?.assessmentsHead?.shortSha ?? "unavailable"}, retrieved {formatDateTime(set?.assessmentsFetchedAt)}.
+        Protocol data: api.frankencoin.com.
+      </p>{
+        set?.warnings.length ? (
+          <ul class="ty-small list-disc pl-5 mt-3">
+            {set.warnings.map((w) => (
+              <li>{w}</li>
+            ))}
+          </ul>
+        ) : null
+      }
+    </details></Section
+  >
 </Base>
-
 <script>
-  import "@/scripts/charts-loader";
+  import "@/scripts/overview";
   import "@/scripts/grid-loader";
 </script>

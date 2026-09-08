@@ -2,6 +2,8 @@
 import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
 import CollateralHeader from "@/components/CollateralHeader.astro";
+import AssessmentSources from "@/components/AssessmentSources.astro";
+import { config } from "@/config";
 import DecisionPanel from "@/components/DecisionPanel.astro";
 import Unavailable from "@/components/Unavailable.astro";
 import ui from "@/content/ui.json";
@@ -54,6 +56,18 @@ if (record.assessment) {
 const ctx: BlockContext = { record, assessment, isHistorical, version, versions, origin: Astro.url.origin };
 const results = await runBlocks(SYSTEM_BLOCKS, ctx);
 
+const sections = [
+  {
+    id: "position-monitoring",
+    title: record.live?.bridge ? "Bridge backing" : "Positions & price exposure",
+    ids: ["bridge", "position-safety", "positions", "challenges"],
+  },
+  { id: "assessment", title: "Risk assessment", ids: ["risk-summary", "risk-parameters", "tail-risks", "narrative", "extra-blocks"] },
+  { id: "changes-sources", title: "Changes & sources", ids: ["live-protocol", "discussion", "versions"] },
+];
+const grouped = new Set(sections.flatMap((s) => s.ids));
+// New content/system blocks remain discoverable even if they are not explicitly grouped yet.
+sections[1]!.ids.push(...results.filter((r) => !grouped.has(r.block.id)).map((r) => r.block.id));
 const title = `${record.name} (${record.ticker})`;
 const description = assessment
   ? `${record.ticker}: ${record.lifecycle} collateral, ${assessment.status} assessment. Free float ${assessment.data.scores.freeFloat ?? "n/a"}, observed downside ${assessment.data.scores.marketRiskPct ?? "n/a"}%, retained reserve ${assessment.data.params.retainedReservePct ?? "n/a"}%. Live positions, discussion and version history.`
@@ -63,29 +77,107 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
 ---
 
 <Base title={title} description={description} type="article" noindex={isHistorical}>
-  <Section variant="accent" pad="xs" width="wide">
+  <Section variant="accent" pad="xs" width="wide" id="overview">
     <CollateralHeader ctx={ctx} />
-    {versionError && <div class="mt-4"><Unavailable compact message={versionError} /></div>}
+    {
+      config.protocolFixturesDir && (
+        <p class="fc-notice mt-4">Sample protocol snapshot. These figures are not the current protocol state.</p>
+      )
+    }
+    {
+      versionError && (
+        <div class="mt-4">
+          <Unavailable compact message={versionError} />
+        </div>
+      )
+    }
     <div class="mt-5">
-      <DecisionPanel ctx={ctx} protocolFetchedAt={set?.protocolFetchedAt ?? null} protocolDegraded={set?.protocolDegraded ?? []} />
+      <DecisionPanel
+        ctx={ctx}
+        protocolFetchedAt={set?.protocolFetchedAt ?? null}
+        protocolDegraded={set?.protocolDegraded ?? []}
+        totalDebt={collaterals.summarize(set?.records ?? []).totalMintedZchf}
+      />
     </div>
   </Section>
 
   <Section pad="xxs" width="wide">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <nav class="fc-view-tabs fc-section-nav" aria-label="Collateral sections">
+      <a href="#overview">Overview</a><a href="#position-monitoring">{record.live?.bridge ? "Bridge backing" : "Positions"}</a><a
+        href="#assessment">Assessment</a
+      ><a href="#changes-sources">Changes & sources</a>
+    </nav>
+    <div class="flex flex-col gap-8 mt-6">
       {
-        results.map((r) => (
-          <section id={r.block.id} class={`fc-card p-5 min-w-0 ${r.block.span === "half" ? "" : "lg:col-span-2"}`} aria-labelledby={`${r.block.id}-title`}>
-            <h2 id={`${r.block.id}-title`} class="fc-card-title mb-4">{r.block.title}</h2>
-            {r.status === "ok" ? <r.block.Component data={r.data} ctx={ctx} /> : <Unavailable message={`${r.block.title}: ${r.error ?? ui.labels.unavailable}`} />}
+        sections.map((section) => (
+          <section id={section.id} class="scroll-mt-24" aria-labelledby={`${section.id}-heading`}>
+            <h2 id={`${section.id}-heading`} class="ty-title-2 font-bold mb-4">
+              {section.title}
+            </h2>
+            {section.id === "changes-sources" && (
+              <div class="fc-card p-5 mb-4">
+                <AssessmentSources ctx={ctx} />
+              </div>
+            )}
+            {section.id === "assessment" && !assessment && (
+              <p class="fc-notice">
+                {record.assessmentUnavailable
+                  ? "The assessment could not be loaded in this snapshot."
+                  : "No assessment is available for this asset yet."}
+              </p>
+            )}
+            {section.id === "position-monitoring" && !results.some((r) => section.ids.includes(r.block.id)) && (
+              <p class="ty-small">No on-chain positions are available for this contract.</p>
+            )}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {results
+                .filter((r) => section.ids.includes(r.block.id))
+                .sort((a, b) => section.ids.indexOf(a.block.id) - section.ids.indexOf(b.block.id))
+                .map((r) => {
+                  const disclosed = ["narrative", "tail-risks", "live-protocol", "discussion", "versions"].includes(r.block.id);
+                  return disclosed ? (
+                    <details id={r.block.id} class="fc-card p-5 min-w-0 lg:col-span-2 scroll-mt-24">
+                      <summary class="ty-title-3 font-bold cursor-pointer">
+                        {r.block.id === "narrative"
+                          ? "Read the full assessment"
+                          : r.block.id === "live-protocol"
+                            ? "All protocol parameters"
+                            : r.block.title}
+                      </summary>
+                      <div class="mt-4">
+                        {r.status === "ok" ? (
+                          <r.block.Component data={r.data} ctx={ctx} />
+                        ) : (
+                          <Unavailable message={`${r.block.title}: ${r.error ?? ui.labels.unavailable}`} />
+                        )}
+                      </div>
+                    </details>
+                  ) : (
+                    <section
+                      id={r.block.id}
+                      class={`fc-card p-5 min-w-0 scroll-mt-24 ${r.block.span === "half" ? "" : "lg:col-span-2"}`}
+                      aria-labelledby={`${r.block.id}-title`}
+                    >
+                      <h3 id={`${r.block.id}-title`} class="ty-title-3 font-bold mb-4">
+                        {r.block.title}
+                      </h3>
+                      {r.status === "ok" ? (
+                        <r.block.Component data={r.data} ctx={ctx} />
+                      ) : (
+                        <Unavailable message={`${r.block.title}: ${r.error ?? ui.labels.unavailable}`} />
+                      )}
+                    </section>
+                  );
+                })}
+            </div>
           </section>
         ))
       }
     </div>
-    {results.length === 0 && <Unavailable message="Nothing to show for this collateral yet." />}
   </Section>
 </Base>
 
 <script>
   import "@/scripts/charts-loader";
+  import "@/scripts/detail-navigation";
 </script>

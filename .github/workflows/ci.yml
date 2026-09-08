@@ -22,7 +22,7 @@ jobs:
           yarn audit --level moderate
           code=$?
           if [ $code -ge 4 ]; then echo "::error::yarn audit found moderate-or-higher advisories (exit $code)"; exit 1; fi
-      - run: yarn check
+      - run: yarn run check
       - run: yarn test
       - run: yarn build
       - name: Smoke-test the production server

@@ -78,6 +78,7 @@ export function formatChf(n: number | null | undefined, dp = 2): string {
 
 export function formatCompact(n: number | null | undefined, dp = 1): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return "–";
+  if (n === 0) return "0";
   const abs = Math.abs(n);
   if (abs >= 1e9) return `${formatNumber(n / 1e9, dp)}B`;
   if (abs >= 1e6) return `${formatNumber(n / 1e6, dp)}M`;

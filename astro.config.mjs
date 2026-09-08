@@ -16,6 +16,8 @@ export default defineConfig({
 
 	vite: {
 		plugins: [tailwindcss()],
+		// Production CSP disallows inline executable scripts, including small Astro bundles.
+		build: { assetsInlineLimit: 0 },
 		ssr: {
 			// diff2html ships CSS + browser-oriented code; keep it out of the SSR bundle.
 			noExternal: [],

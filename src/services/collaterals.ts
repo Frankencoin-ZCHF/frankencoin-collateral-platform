@@ -11,6 +11,7 @@ import { getOrLoad, TTL } from "@/lib/cache";
 import { describeForLog } from "@/lib/errors";
 import { round, sum } from "@/lib/numbers";
 import { slugFromTicker } from "@/lib/slug";
+import { priceQuality } from "./monitoring";
 import * as coingecko from "@/upstream/coingecko";
 import * as assessments from "./assessments";
 import * as protocol from "./protocol";
@@ -23,6 +24,7 @@ export interface CollateralSet {
   assessmentFailures: ParseFailure[];
   protocolFetchedAt: string | null;
   protocolDegraded: string[];
+  unattributedActiveChallenges: number;
   /** Human-readable notes about degraded sources. */
   warnings: string[];
 }
@@ -30,7 +32,7 @@ export interface CollateralSet {
 /** Lifecycle from protocol counts (aggregate endpoint preferred, position feed as fallback). */
 export function deriveLifecycle(live: LiveCollateral | null): CollateralLifecycle {
   if (!live) return "draft";
-  // 1:1 bridge: live while it has ZCHF outstanding and has not expired; closed once expired.
+  // Expiry ends minting, but an outstanding bridge remains part of current backing.
   if (live.bridge) return live.bridge.expired ? (live.bridge.mintedZchf > 0 ? "live" : "closed") : live.bridge.mintedZchf > 0 ? "live" : "proposed";
   const c = live.counts;
   const open = c ? c.open : live.positions.active;
@@ -59,14 +61,17 @@ function issuesFor(a: Assessment | null, live: LiveCollateral | null, lifecycle:
   }
   // Peg risk only matters while ZCHF is actually outstanding against the stablecoin.
   if (live?.bridge && live.bridge.mintedZchf > 0 && live.price && Math.abs(live.price.chf - 1) > 0.01) {
-    issues.push({ code: "bridge-peg", severity: Math.abs(live.price.chf - 1) > 0.03 ? "high" : "medium", message: `The source stablecoin trades at ${live.price.chf.toFixed(3)} CHF (${((live.price.chf - 1) * 100).toFixed(1)} % off its 1:1 peg) while ${Math.round(live.bridge.mintedZchf).toLocaleString("en-CH")} ZCHF is minted against it 1:1.` });
+    issues.push({ code: "bridge-peg", severity: Math.abs(live.price.chf - 1) > 0.03 ? "high" : "medium", message: `The last observed source-stablecoin price was ${live.price.chf.toFixed(3)} CHF (${((live.price.chf - 1) * 100).toFixed(1)} % off its 1:1 peg) while ${Math.round(live.bridge.mintedZchf).toLocaleString("en-CH")} ZCHF is minted against it 1:1.` });
   }
   if (live?.bridge?.expired && live.bridge.mintedZchf > 0) {
     issues.push({ code: "bridge-expired", severity: "low", message: `Bridge horizon passed on ${live.bridge.horizon?.slice(0, 10)}; minting is closed, ${Math.round(live.bridge.mintedZchf).toLocaleString("en-CH")} ZCHF remain redeemable.` });
   }
-  if (live?.price?.timestamp) {
-    const ageH = (Date.now() - new Date(live.price.timestamp).getTime()) / 3_600_000;
-    if (ageH > 24) issues.push({ code: "stale-price", severity: "low", message: `Price feed is ${Math.round(ageH)} h old.` });
+  if (live && live.totalMintedZchf > 0) {
+    const quality = priceQuality(live);
+    if (quality.state !== "current") issues.push({
+      code: quality.state === "stale" ? "stale-price" : quality.state === "unavailable" ? "price-unavailable" : "price-time-invalid",
+      severity: "medium", message: quality.detail,
+    });
   }
   return issues;
 }
@@ -227,8 +232,8 @@ export function all(): Promise<CollateralSet> {
       warnings.push(`Protocol data partially degraded (${snap.value.degraded.join(", ")}) — affected figures fall back to the position feed.`);
     }
     if (snap.status === "fulfilled" && snap.value.unmatchedChallenges.length) {
-      const u = snap.value.unmatchedChallenges;
-      warnings.push(`${u.length} challenge${u.length === 1 ? "" : "s"} (${u.map((x) => x.position.slice(0, 10) + "…").join(", ")}) refer${u.length === 1 ? "s" : ""} to a position missing from the position feed and cannot be attributed to a collateral.`);
+      const u = snap.value.unmatchedChallenges.filter((c) => c.isActive);
+      if (u.length) warnings.push(`${u.length} active challenge${u.length === 1 ? "" : "s"} (${u.map((x) => x.position.slice(0, 10) + "…").join(", ")}) refer${u.length === 1 ? "s" : ""} to a position missing from the position feed and cannot be attributed to a collateral.`);
     }
     if (idx.status === "rejected" && snap.status === "rejected") throw idx.reason;
 
@@ -237,6 +242,9 @@ export function all(): Promise<CollateralSet> {
     if (failures.length) warnings.push(`${failures.length} assessment file${failures.length === 1 ? "" : "s"} could not be loaded from GitHub in this snapshot; the affected collaterals are marked "assessment unavailable" and will be retried shortly.`);
     const live = snap.status === "fulfilled" ? snap.value.byAddress : new Map<string, LiveCollateral>();
     const records = join(items, live, undefined, failures, indexUnavailable);
+    if (snap.status === "rejected" || snap.value.degraded.length > 0) {
+      for (const record of records) record.issues.push({ code: "protocol-unavailable", severity: "medium", message: "Protocol monitoring is incomplete because one or more data sources could not be loaded. Displayed values may only cover part of the system." });
+    }
     await enrichMarket(records);
 
     return {
@@ -245,6 +253,7 @@ export function all(): Promise<CollateralSet> {
       assessmentsFetchedAt: idx.status === "fulfilled" ? idx.value.fetchedAt : null,
       assessmentFailures: idx.status === "fulfilled" ? idx.value.failures : [],
       protocolFetchedAt: snap.status === "fulfilled" ? snap.value.fetchedAt : null,
+      unattributedActiveChallenges: snap.status === "fulfilled" ? snap.value.unmatchedChallenges.filter((c) => c.isActive).length : 0,
       protocolDegraded: snap.status === "fulfilled" ? snap.value.degraded : ["all"],
       warnings,
     };

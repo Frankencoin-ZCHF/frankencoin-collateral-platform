@@ -1,105 +1,133 @@
 ---
-/* Compact decision panel: the first five questions, answered on one card, with separate clocks
-   for the assessment snapshot and the live protocol state. */
 import type { BlockContext } from "@/blocks/types";
-import LifecycleBadges from "./LifecycleBadges.astro";
+import { assessmentExcerpt } from "@/services/assessment-summary";
 import { formatCompact, formatDate, formatDateTime, formatPercent } from "@/lib/numbers";
-import { itemsFor } from "@/services/attention";
-
+import { itemsFor, monitoringStatus } from "@/services/attention";
+import { nearDebtDescription, priceQuality } from "@/services/monitoring";
 interface Props {
   ctx: BlockContext;
   protocolFetchedAt: string | null;
   protocolDegraded: string[];
+  totalDebt?: number;
 }
-const { ctx, protocolFetchedAt, protocolDegraded } = Astro.props as Props;
-const { record, assessment, version } = ctx;
+const { ctx, protocolFetchedAt, protocolDegraded, totalDebt } = Astro.props;
+const { record, assessment } = ctx;
 const l = record.live;
-const s = l?.safety ?? null;
-const items = itemsFor(record);
-const liveItems = items.filter((i) => i.queue === "live");
-const reviewItems = items.filter((i) => i.queue === "review");
-const liveHigh = liveItems.filter((i) => i.severity === "high").length;
-const bufferTone = s?.minLiquidationBufferPct == null ? "" : s.minLiquidationBufferPct < 5 ? "text-red-700" : s.minLiquidationBufferPct < 15 ? "text-amber-700" : "text-emerald-700";
-const today = new Date().toISOString().slice(0, 10);
-const futureDate = Boolean(assessment?.data.assessmentDate && assessment.data.assessmentDate > today);
-const short = (t: string) => t.replace(/ (differs from draft proposal|deviates from the published assessment)$/, "");
+const findings = itemsFor({ ...record, assessment });
+const monitoring = monitoringStatus(record);
+const dataFindings = findings.filter((i) => i.queue === "data");
+const reviewFindings = findings.filter((i) => i.queue === "review");
+const quality = l ? priceQuality(l) : null;
+const excerpt = assessment ? assessmentExcerpt(assessment.body) : "";
 ---
 
-<section class="fc-card p-5 flex flex-col gap-4" aria-label="Decision summary">
-  <LifecycleBadges record={record} size="lg" />
-
-  {
-    assessment?.status === "draft" && (
-      <p class="ty-small text-amber-900 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
-        <strong>Draft assessment — under review.</strong> The collateral lifecycle and live protocol settings are shown separately. This assessment is not itself a governance decision or an approved parameter set.
-      </p>
-    )
-  }
-
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+<section class="fc-card p-5 flex flex-col gap-5" aria-label="Collateral overview">
+  <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
     <div>
-      <p class="fc-kv-label">Live risk now</p>
-      <p class={`fc-kv-value ${liveHigh ? "text-red-700" : liveItems.length ? "text-amber-700" : "text-emerald-700"}`}>
-        {liveItems.length > 0 ? <a href={`/attention#${record.slug}`} class="underline decoration-dotted hover:text-[var(--color-brand-swiss)]">{liveItems.length}</a> : "calm"}
+      <p class="fc-kv-label">Outstanding ZCHF exposure</p><p class="fc-kv-value">{l ? formatCompact(l.totalMintedZchf) : "–"}</p><p
+        class="fc-cell-note"
+      >
+        {
+          l && totalDebt
+            ? `${formatPercent((l.totalMintedZchf / totalDebt) * 100, 1)} of exposure shown on this platform`
+            : l
+              ? "Share unavailable"
+              : "Protocol exposure unavailable"
+        }
       </p>
-      <p class="fc-kv-unit">{liveItems.length ? liveItems.map((i) => short(i.title)).join(", ") : "no challenges, no debt near liquidation, sources agree"}</p>
     </div>
     <div>
-      <p class="fc-kv-label">Debt (minted ZCHF)</p>
-      <p class="fc-kv-value">{l ? formatCompact(l.totalMintedZchf) : "–"}</p>
-      <p class="fc-kv-unit">{l?.bridge ? `minted 1:1 against ${l.symbol} · ${formatPercent(l.bridge.limitUsedPct, 1)} of the ${formatCompact(l.bridge.limitZchf)} ZCHF bridge limit` : l?.collateralValueChf != null ? `against ${formatCompact(l.collateralValueChf)} CHF oracle-valued collateral` : "no on-chain positions"}</p>
-    </div>
-    {
-      l?.bridge ? (
-        <div>
-          <p class="fc-kv-label">Backing</p>
-          <p class="fc-kv-value">1 : 1</p>
-          <p class="fc-kv-unit">{l.symbol} held by the bridge · no buffer, no liquidation · <a href="#bridge" class="underline decoration-dotted">how it works</a></p>
-        </div>
-      ) : (
-        <div>
-          <p class="fc-kv-label">Minimum liquidation buffer</p>
-          <p class={`fc-kv-value ${bufferTone}`}>{s ? <a href="#positions-at-risk" class="hover:underline">{formatPercent(s.minLiquidationBufferPct, 1)}</a> : "–"}</p>
-          <p class="fc-kv-unit">{s ? <><a href="#positions-at-risk" class="underline decoration-dotted">{formatCompact(s.debtWithin.pct10)} ZCHF within 10 %</a> of liquidation — click for the positions</> : "no priced positions"}</p>
-        </div>
-      )
-    }
-    <div>
-      <p class="fc-kv-label">Assessment review</p>
-      <p class={`fc-kv-value ${reviewItems.length ? "text-[var(--color-neutral-650)]" : ""}`}>
-        {reviewItems.length > 0 ? <a href={`/attention#${record.slug}`} class="underline decoration-dotted hover:text-[var(--color-brand-swiss)]">{reviewItems.length}</a> : assessment ? "0" : "–"}
+      <p class="fc-kv-label">Estimated backing value</p><p class="fc-kv-value">{formatCompact(l?.collateralValueChf)}</p><p
+        class="fc-cell-note"
+      >
+        CHF at reference market prices{quality?.state !== "current" && " · valuation needs verification"}
       </p>
-      <p class="fc-kv-unit">{reviewItems.length ? reviewItems.map((i) => short(i.title)).join(", ") : assessment ? "live settings match the proposal" : "no assessment to compare"}</p>
+    </div>
+    <div>
+      <p class="fc-kv-label">{l?.bridge ? "Backing mechanism" : "Nearest price cushion"}</p><p class="fc-kv-value">
+        {l?.bridge ? "1 : 1" : formatPercent(l?.safety?.minLiquidationBufferPct, 1)}
+      </p><p class="fc-cell-note">
+        {
+          l?.bridge
+            ? `${record.ticker} held in the bridge · issuer exposure`
+            : "Distance to a configured liquidation price, at the last observed market price"
+        }
+      </p>
     </div>
   </div>
-
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-[var(--color-gray-20)] pt-3 ty-xs text-[var(--color-gray-75)]">
-    <div>
-      <span class="fc-kv-label">Assessment snapshot</span>
-      {
-        assessment ? (
-          <p>
-            authored {formatDate(assessment.data.assessmentDate)}{futureDate && <span class="text-amber-700" title="The authored date lies in the future — most likely a typo in the assessment file. It has no bearing on the live figures."> (date in the future — likely a typo)</span>} by <span class="font-bold text-[var(--color-neutral-700)]">{assessment.data.author}</span> · {assessment.status}
-            {version && <> · version <span class="font-mono">{version.shortSha}</span> committed {formatDateTime(version.date)}</>}
+  <div class="border-t border-[var(--color-gray-20)] pt-4">
+    <p class="ty-small font-bold">{monitoring.label}</p>{
+      l?.safety ? (
+        <p class="ty-small mt-1">
+          {nearDebtDescription(l)}{" "}
+          <a href="#position-monitoring" class="underline">
+            Inspect positions →
+          </a>
+        </p>
+      ) : (
+        <p class="ty-small mt-1">{monitoring.detail}</p>
+      )
+    }{
+      dataFindings.length > 0 && (
+        <p class="fc-notice mt-3">
+          <strong>Monitoring limitations:</strong> {dataFindings.map((i) => i.title).join(" · ")}.{" "}
+          <a href={`/attention#data-${record.slug}`} class="underline">
+            Review data quality →
+          </a>
+        </p>
+      )
+    }
+  </div>
+  {
+    excerpt && (
+      <div class="border-t border-[var(--color-gray-20)] pt-4">
+        <>
+          <h2 class="ty-title-3 font-bold">The author's assessment</h2>
+          <div class="fc-prose fc-summary-prose" set:html={excerpt} />
+          <p class="ty-small text-[var(--color-gray-75)]">
+            {assessment!.data.author} · assessed {formatDate(assessment!.data.assessmentDate)}
+            {assessment!.data.assessmentDate > new Date().toISOString().slice(0, 10) && " (future-dated; verify the author’s date)"} ·{" "}
+            {assessment!.status}.{" "}
+            <a class="underline" href="#narrative">
+              Read the full assessment →
+            </a>
           </p>
-        ) : record.assessmentUnavailable ? (
-          <p>temporarily unavailable — the file could not be loaded in this snapshot and will be retried.</p>
-        ) : (
-          <p>none — this collateral has no risk assessment in the repository.</p>
-        )
-      }
-    </div>
-    <div>
-      <span class="fc-kv-label">Live protocol state</span>
-      <p>
-        {l ? <>Ethereum · api.frankencoin.com · fetched {formatDateTime(protocolFetchedAt)} · refreshes every minute{protocolDegraded.length > 0 && <span class="text-amber-700"> · degraded: {protocolDegraded.join(", ")}</span>}</> : "no on-chain data for this contract"}
-      </p>
-    </div>
-    <div>
-      <span class="fc-kv-label">Governance reference</span>
-      <p>
-        {assessment?.data.discussionUrl ? <a href={assessment.data.discussionUrl} target="_blank" rel="noopener noreferrer" class="underline text-[var(--color-blue-39)]">Discussion thread ↗</a> : "not linked"} · approval / review data is not yet published by the protocol
-      </p>
-    </div>
+        </>
+      </div>
+    )
+  }
+  <div class="flex flex-wrap gap-x-5 gap-y-2 ty-small text-[var(--color-gray-75)]">
+    <a href="#assessment" class="underline"
+      >{
+        assessment
+          ? `${reviewFindings.length} assessment finding${reviewFindings.length === 1 ? "" : "s"}`
+          : record.assessmentUnavailable
+            ? "Assessment unavailable"
+            : "Assessment missing"
+      }</a
+    ><span>Publication does not establish governance approval.</span>
+  </div>
+  <div class="border-t border-[var(--color-gray-20)] pt-3 ty-small text-[var(--color-gray-75)]">
+    <p>
+      Protocol data fetched {formatDateTime(protocolFetchedAt)}. <button
+        type="button"
+        x-data
+        @click="window.location.reload()"
+        class="underline">Refresh data</button>
+    </p>{
+      l && (
+        <p class="mt-1">
+          Reference price observed {quality?.state === "invalid-time" ? "at an unverified time" : formatDateTime(l.price?.timestamp)} ·{" "}
+          {quality?.label.toLowerCase()}.{" "}
+          <a href="#changes-sources" class="underline">
+            Sources & versions
+          </a>
+        </p>
+      )
+    }{
+      protocolDegraded.length > 0 && (
+        <p class="text-amber-900 mt-1">Some protocol data sources could not be loaded. Displayed totals may be incomplete.</p>
+      )
+    }
   </div>
 </section>

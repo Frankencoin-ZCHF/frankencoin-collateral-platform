@@ -1,16 +1,26 @@
 /**
- * Flat row shape shared by the overview grid (client), the SSR fallback table and
+ * Flat row shape shared by the overview grid (client), the basic SSR table and
  * /api/collaterals.json. Keep it JSON-serialisable and flat — AG Grid columns map 1:1.
  */
 
 import type { CollateralLifecycle, CollateralRecord } from "@/types";
-import { itemsFor } from "@/services/attention";
+import { assetProfile } from "./assets";
+import { priceQuality } from "@/services/monitoring";
+import { itemsFor, monitoringStatus } from "@/services/attention";
 
 export interface CollateralRow {
   slug: string;
   url: string;
   ticker: string;
   name: string;
+  assetType: string;
+  exposureGroup: string;
+  sharePct: number | null;
+  monitoringLabel: string;
+  monitoringDetail: string;
+  dataQualityCount: number;
+  priceQuality: string;
+  priceObservedAt: string | null;
   address: string | null;
   kind: "assessed" | "live-only" | "both";
   lifecycle: CollateralLifecycle;
@@ -65,15 +75,17 @@ export interface CollateralRow {
   /** Assessment-review queue items (same list as /attention#review). */
   reviewCount: number;
   review: string[];
-  /** Compact live-risk state for the grid: "ok" | "watch" | "risk". */
-  liveRiskState: "ok" | "watch" | "risk";
+  /** Observed financial state, data uncertainty, or no outstanding exposure. */
+  liveRiskState: "ok" | "watch" | "risk" | "unknown" | "inactive";
   attentionUrl: string;
 }
 
-export function toRow(r: CollateralRecord): CollateralRow {
+export function toRow(r: CollateralRecord, totalDebt?: number): CollateralRow {
   const a = r.assessment?.data ?? null;
   const l = r.live;
   const items = itemsFor(r);
+  const monitoring = monitoringStatus(r);
+  const profile = assetProfile(r.address, Boolean(l?.bridge));
   const liveItems = items.filter((i) => i.queue === "live");
   const reviewItems = items.filter((i) => i.queue === "review");
   const liveHigh = liveItems.filter((i) => i.severity === "high").length;
@@ -82,6 +94,14 @@ export function toRow(r: CollateralRecord): CollateralRow {
     url: `/collateral/${r.slug}`,
     ticker: r.ticker,
     name: r.name,
+    assetType: profile.type,
+    exposureGroup: profile.group,
+    sharePct: totalDebt && l ? l.totalMintedZchf / totalDebt * 100 : null,
+    monitoringLabel: monitoring.label,
+    monitoringDetail: monitoring.detail,
+    dataQualityCount: items.filter((i) => i.queue === "data").length,
+    priceQuality: l ? priceQuality(l).state : "unavailable",
+    priceObservedAt: l?.price?.timestamp ?? null,
     address: r.address,
     kind: r.kind,
     lifecycle: r.lifecycle,
@@ -133,7 +153,7 @@ export function toRow(r: CollateralRecord): CollateralRow {
     liveRisk: liveItems.map((i) => i.title),
     reviewCount: reviewItems.length,
     review: reviewItems.map((i) => i.title),
-    liveRiskState: liveHigh > 0 ? "risk" : liveItems.length > 0 ? "watch" : "ok",
-    attentionUrl: `/attention#${r.slug}`,
+    liveRiskState: monitoring.state,
+    attentionUrl: liveItems.length && monitoring.state !== "unknown" ? `/attention#live-${r.slug}` : items.some((i) => i.queue === "data") ? `/attention#data-${r.slug}` : `/collateral/${r.slug}#position-monitoring`,
   };
 }

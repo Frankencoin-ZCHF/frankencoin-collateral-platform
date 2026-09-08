@@ -20,9 +20,9 @@ const worst = [...d.tailRisks].filter((t) => t.compensationPct).sort((a, b) => (
     <p class="mt-1"><Pill value={d.scores.publicInformation} /></p>
   </div>
   <div>
-    <p class="fc-kv-label">Observed 48-hour downside</p>
+    <p class="fc-kv-label">Observed downside{d.params.auctionDurationHours ? ` · ${d.params.auctionDurationHours * 2} hours` : ""}</p>
     <p class="fc-kv-value">{formatPercent(d.scores.marketRiskPct)}</p>
-    <p class="fc-kv-unit">max drawdown or 99 % VaR over twice the auction duration</p>
+    <p class="fc-kv-unit">historical drawdown or VaR from the assessment; not a maximum possible future loss</p>
   </div>
   <div>
     <p class="fc-kv-label">Tail-risk compensation</p>
@@ -32,7 +32,7 @@ const worst = [...d.tailRisks].filter((t) => t.compensationPct).sort((a, b) => (
   <div>
     <p class="fc-kv-label">Assessed retained reserve</p>
     <p class="fc-kv-value">{formatPercent(d.params.retainedReservePct, 1)}</p>
-    <p class="fc-kv-unit">haircut = observed downside + 2 %</p>
+    <p class="fc-kv-unit">author's proposed share of minted ZCHF retained for liquidation outcomes</p>
   </div>
   <div>
     <p class="fc-kv-label">Assessed target premium</p>
@@ -44,12 +44,12 @@ const worst = [...d.tailRisks].filter((t) => t.compensationPct).sort((a, b) => (
 {
   worst.length > 0 && (
     <div class="mt-4">
-      <p class="fc-kv-label mb-1">Main residual risks</p>
+      <p class="fc-kv-label mb-1">Main assessed residual risks</p>
       <ul class="flex flex-col gap-1">
         {worst.map((t) => (
-          <li class="ty-small flex items-baseline justify-between gap-2">
-            <span class="truncate">{t.name}</span>
-            <span class="tabular-nums text-[var(--color-gray-75)] shrink-0">{formatPercent(t.compensationPct)}</span>
+          <li class="ty-small flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <span>{t.name}</span>
+            <span class="text-[var(--color-gray-75)] shrink-0">{t.probability ?? "Unrated"} likelihood · {t.severity ?? "unrated"} impact</span>
           </li>
         ))}
       </ul>

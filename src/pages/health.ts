@@ -22,7 +22,8 @@ export const GET: APIRoute = async () => {
     mode: config.assessmentsLocalPath || config.protocolFixturesDir ? "offline" : "live",
     coingecko: config.coingeckoApiKey ? "pro" : "public",
   };
-  const ok = sources.github === "ok" && sources.frankencoinApi !== "error";
+  // A successfully loaded local clone is healthy too; labels describe the source, not success.
+  const ok = idx.status === "fulfilled" && snap.status === "fulfilled";
 
   const body = {
     ok,

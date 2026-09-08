@@ -260,7 +260,7 @@ export type CollateralKind = "assessed" | "live-only" | "both";
 export type CollateralLifecycle = "draft" | "proposed" | "live" | "closed" | "denied";
 
 export interface IntegrityIssue {
-  code: "address-mismatch" | "feed-divergence" | "no-assessment" | "stale-price" | "assessment-unavailable" | "bridge-peg" | "bridge-expired";
+  code: "address-mismatch" | "feed-divergence" | "no-assessment" | "stale-price" | "price-unavailable" | "price-time-invalid" | "protocol-unavailable" | "assessment-unavailable" | "bridge-peg" | "bridge-expired";
   severity: "high" | "medium" | "low";
   message: string;
 }

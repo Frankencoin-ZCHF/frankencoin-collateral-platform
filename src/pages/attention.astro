@@ -2,15 +2,13 @@
 import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
 import AttentionList from "@/components/AttentionList.astro";
-import Unavailable from "@/components/Unavailable.astro";
-import Button from "@/components/Button/Button.astro";
 import * as collaterals from "@/services/collaterals";
-import { attentionGroups, summarizeAttention } from "@/services/attention";
+import { attentionGroups, summarizeAttention, type Queue } from "@/services/attention";
+import { monitoringCoverage } from "@/services/monitoring";
 import { describeForLog } from "@/lib/errors";
-import { formatCompact, formatDateTime } from "@/lib/numbers";
-
+import { formatCompact, formatDateTime, formatPercent } from "@/lib/numbers";
+import { config } from "@/config";
 export const prerender = false;
-
 let set: Awaited<ReturnType<typeof collaterals.all>> | null = null;
 try {
   set = await collaterals.all();
@@ -18,55 +16,90 @@ try {
   console.error(`[attention] ${describeForLog(e)}`);
 }
 const records = set?.records ?? [];
-const live = attentionGroups(records, "live");
-const review = attentionGroups(records, "review");
-const att = summarizeAttention(records);
-
+const att = summarizeAttention(records, set?.unattributedActiveChallenges ?? 0);
+const coverage = monitoringCoverage(records);
+const queues: { id: Queue; title: string; description: string; count: number }[] = [
+  {
+    id: "live",
+    title: "Financial monitoring",
+    description:
+      "Active challenges, observed price proximity and stablecoin peg changes. Findings using outdated prices describe the last observation; check the data-quality section before interpreting them.",
+    count: att.live.items,
+  },
+  {
+    id: "data",
+    title: "Data quality",
+    description:
+      "Outdated or unverified prices, incomplete position data and unavailable sources. These limit what monitoring can tell you; they do not establish a financial loss.",
+    count: att.data.items,
+  },
+  {
+    id: "review",
+    title: "Assessment findings",
+    description:
+      "Missing assessments, differences from proposed parameters and governance references to review. A published assessment alone does not establish an adopted governance baseline.",
+    count: att.review.items,
+  },
+];
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 ---
 
-<Base title="Attention" description="Live risk now (challenges, debt close to liquidation, data-integrity exceptions) and assessment-review items across all Frankencoin collaterals.">
-  <Section variant="accent" pad="xs" width="wide">
-    <nav class="ty-xs text-[var(--color-gray-75)] mb-3" aria-label="Breadcrumb">
-      <a href="/" class="hover:underline">Collaterals</a> › Attention
-    </nav>
-    <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-      <div class="max-w-3xl">
-        <h1 class="ty-large-title">Attention</h1>
-        <p class="ty-body-2 text-[var(--color-neutral-650)] mt-2">
-          Two queues, kept apart on purpose: <a href="#live" class="underline">live risk now</a> is what a risk operator acts on today; <a href="#review" class="underline">assessment review</a> is where proposals differ from live settings and await a governance or review decision.
-        </p>
-      </div>
-      <Button href="/" variant="secondary" size="sm">All collaterals</Button>
-    </div>
-    {set?.warnings.map((w) => <div class="mt-4"><Unavailable message={w} compact /></div>)}
-  </Section>
-
-  <Section pad="xs" width="wide">
-    <div class="flex flex-col gap-8">
-      <section id="live" class="fc-card p-5 scroll-mt-24" aria-labelledby="live-title">
-        <div class="flex flex-wrap items-baseline justify-between gap-3 mb-1">
-          <h2 id="live-title" class="ty-title-2 text-[var(--color-brand-deep-blue)] flex items-center gap-2">
-            Live risk now
-            <span class={`fc-pill ${att.live.items === 0 ? "fc-pill-strong" : att.live.high ? "fc-pill-insufficient" : "fc-pill-sufficient"}`}>{att.live.items === 0 ? "calm" : att.live.high ? "action needed" : "watch"}</span>
-          </h2>
-          <span class="ty-xs text-[var(--color-gray-75)]">{att.live.items} item{att.live.items === 1 ? "" : "s"} · {att.live.challenges} active challenge{att.live.challenges === 1 ? "" : "s"} · {formatCompact(att.live.debtWithin10Pct)} ZCHF within 10 % of liquidation · {att.live.integrity} data-integrity exception{att.live.integrity === 1 ? "" : "s"}</span>
-        </div>
-        <p class="ty-2xs text-[var(--color-gray-60)] mb-4">Active challenges, debt close to liquidation, stale or divergent price/position data, contract-address mismatches, live collateral with no assessment record, and deviations from a <em>published</em> assessment. Red = act now; amber = watch.</p>
-        <AttentionList groups={live} />
-      </section>
-
-      <section id="review" class="fc-card p-5 scroll-mt-24" aria-labelledby="review-title">
-        <div class="flex flex-wrap items-baseline justify-between gap-3 mb-1">
-          <h2 id="review-title" class="ty-title-2 text-[var(--color-brand-deep-blue)]">Assessment review</h2>
-          <span class="ty-xs text-[var(--color-gray-75)]">{att.review.items} item{att.review.items === 1 ? "" : "s"} · {att.review.draftAssessments} draft assessment{att.review.draftAssessments === 1 ? "" : "s"} · {att.review.parameterDifferences} draft-proposal difference{att.review.parameterDifferences === 1 ? "" : "s"}</span>
-        </div>
-        <p class="ty-2xs text-[var(--color-gray-60)] mb-4">Differences between live settings and a <em>draft</em> proposal, and assessments without a governance reference. A draft is not an approved baseline, so these are review material — not live risk and not a breach of anything.</p>
-        <AttentionList groups={review} />
-      </section>
-    </div>
-    <p class="ty-2xs text-[var(--color-gray-60)] mt-3">
-      Live protocol state fetched {formatDateTime(set?.protocolFetchedAt ?? null)} · assessments at commit <span class="font-mono">{set?.assessmentsHead?.shortSha ?? "–"}</span>.
-    </p>
-  </Section>
+<Base title="Monitoring & review">
+  <Section variant="accent" pad="xs" width="wide"
+    ><a href="/" class="ty-small underline">All assets</a><h1 class="ty-large-title mt-3">Monitoring & review</h1><p
+      class="ty-body-2 mt-3 max-w-3xl"
+    >
+      Understand the financial observations, the reliability of their data, and the assessments that need further review.
+    </p>{
+      config.protocolFixturesDir && (
+        <p class="fc-notice mt-4">Sample protocol snapshot. These figures are not the current protocol state.</p>
+      )
+    }{!set?.protocolFetchedAt && <p class="fc-notice mt-4">Protocol data could not be loaded. Financial monitoring is unavailable.</p>}<div
+      class="fc-monitoring-strip mt-4"
+    >
+      <p>
+        <strong>{formatPercent(coverage.sharePct, 1)} monitoring coverage</strong> by reported outstanding ZCHF. {
+          coverage.monitoredDebt > 0
+            ? `${formatCompact(coverage.freshNearDebt)} ZCHF lies within 10% of a liquidation price in the covered data.`
+            : "No exposure has complete price-based monitoring in this snapshot."
+        }
+      </p><p>
+        Protocol data fetched {formatDateTime(set?.protocolFetchedAt)}. <button
+          x-data
+          type="button"
+          @click="window.location.reload()"
+          class="underline">Refresh data</button>
+      </p>
+    </div></Section
+  >
+  <Section pad="xs" width="wide"
+    ><nav class="fc-view-tabs mb-6" aria-label="Finding categories">{queues.map((q) => <a href={`#${q.id}`}>{q.title}</a>)}</nav><div
+      class="flex flex-col gap-6"
+    >
+      {
+        queues.map((q) => (
+          <section id={q.id} class="fc-card p-5 scroll-mt-24" aria-labelledby={`${q.id}-title`}>
+            <div class="flex flex-wrap gap-3 items-baseline justify-between">
+              <h2 id={`${q.id}-title`} class="ty-title-2 font-bold">{q.title}</h2>
+              <span class="ty-small text-[var(--color-gray-75)]">{q.count} findings</span>
+            </div>
+            <p class="ty-small text-[var(--color-gray-75)] mt-2 mb-4">{q.description}</p>
+            {q.id === "live" && (set?.unattributedActiveChallenges ?? 0) > 0 && (
+              <p class="fc-notice mb-4">
+                {set!.unattributedActiveChallenges} active challenges cannot be assigned to an asset because their positions are missing
+                from the feed. They are included in the total.{" "}
+                <a class="underline" href="https://app.frankencoin.com/challenges">
+                  Inspect challenges ↗
+                </a>
+              </p>
+            )}
+            <AttentionList groups={attentionGroups(records, q.id)} queue={q.id} expanded={q.id === "live"} />
+          </section>
+        ))
+      }
+    </div></Section
+  >
 </Base>
+<script>
+  import "@/scripts/detail-navigation";
+</script>

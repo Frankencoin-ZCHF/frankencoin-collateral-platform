@@ -1,14 +1,18 @@
 ---
+import type { BlockContext } from "@/blocks/types";
+import { priceQuality } from "@/services/monitoring";
 import type { BridgeData } from "./index";
 import { ETHERSCAN } from "@/lib/constants";
 import { formatCompact, formatDate, formatDateTime, formatNumber, formatPercent, shortAddress } from "@/lib/numbers";
 interface Props {
   data: BridgeData;
+  ctx: BlockContext;
 }
-const { data } = Astro.props as Props;
+const { data, ctx } = Astro.props as Props;
 const b = data.bridge;
 const used = b.limitUsedPct ?? 0;
-const pegTone = data.pegDeviationPct === null ? "" : Math.abs(data.pegDeviationPct) > 3 ? "text-red-700" : Math.abs(data.pegDeviationPct) > 1 ? "text-amber-700" : "text-emerald-700";
+const quality = priceQuality(ctx.record.live!);
+const pegTone = quality.state !== "current" || data.pegDeviationPct === null ? "" : Math.abs(data.pegDeviationPct) > 3 ? "text-red-700" : Math.abs(data.pegDeviationPct) > 1 ? "text-amber-700" : "text-[var(--color-brand-deep-blue)]";
 ---
 
 <p class="ty-small text-[var(--color-neutral-650)] mb-4">
@@ -16,6 +20,8 @@ const pegTone = data.pegDeviationPct === null ? "" : Math.abs(data.pegDeviationP
   {formatCompact(b.limitZchf)} ZCHF outstanding, until its horizon on {formatDate(b.horizon)}. Anyone can burn ZCHF at the bridge to get {data.symbol} back 1:1 —
   also after the horizon. There is no over-collateralisation, no oracle and no liquidation: the ZCHF minted here is backed by the {data.symbol} sitting in the bridge.
 </p>
+
+{quality.state !== "current" && <p class="fc-notice mb-4">{quality.detail}</p>}
 
 <div class="fc-kv !grid-cols-2 lg:!grid-cols-4">
   <div>
@@ -50,7 +56,7 @@ const pegTone = data.pegDeviationPct === null ? "" : Math.abs(data.pegDeviationP
   <ul class="ty-xs text-amber-900 list-disc pl-5 flex flex-col gap-1">
     <li><strong>Issuer / credit risk of {data.symbol}:</strong> if the issuer fails, freezes the tokens held by the bridge, or {data.symbol} loses its CHF peg, the {formatCompact(b.mintedZchf)} ZCHF minted here is under-backed by that shortfall. The bridge cannot be liquidated or challenged; the loss would fall on the protocol's reserve.</li>
     <li><strong>No buffer:</strong> unlike collateralised positions there is no retained reserve, no risk premium and no liquidation buffer — the whole exposure is one-for-one.</li>
-    <li><strong>Freeze handling:</strong> the contract has a credit path (<code>burnAndCredit</code> / <code>payoutCredit</code>) so that, if the issuer freezes the bridge's balance, compliant holders can still be paid out selectively.</li>
+    <li><strong>Freeze handling:</strong> a credit mechanism supports selective redemption if the issuer freezes the bridge. Availability depends on the issuer's restrictions and the contract terms.</li>
     <li><strong>Horizon:</strong> every bridge expires 52 weeks after deployment; continuing requires a new minter application and governance approval, which is the protocol's periodic chance to re-assess the issuer.</li>
   </ul>
 </div>

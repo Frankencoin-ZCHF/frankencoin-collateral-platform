@@ -15,10 +15,10 @@ const riskParameters: SystemBlock<RiskParametersData> = {
   id: "risk-parameters",
   title: "Risk parameters — assessed vs on-chain",
   order: 30,
-  enabled: (ctx) => ctx.assessment !== null,
+  enabled: (ctx) => ctx.assessment !== null && !ctx.record.live?.bridge,
   load: async (ctx) => {
     const rows = compareParameters(ctx.assessment!.data.params, ctx.record.live, ctx.assessment!.status);
-    return { rows, hasLive: (ctx.record.live?.positions.active ?? 0) > 0, differs: rows.filter((r) => r.verdict === "differs").length, status: ctx.assessment!.status };
+    return { rows, hasLive: (ctx.record.live?.positions.active ?? 0) > 0, differs: rows.filter((r) => ["differs", "varies", "within-tolerance", "within-range"].includes(r.verdict)).length, status: ctx.assessment!.status };
   },
   Component: Block,
 };

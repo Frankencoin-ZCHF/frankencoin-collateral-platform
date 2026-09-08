@@ -15,7 +15,7 @@ const d = data.primary;
 {
   !data.available ? (
     <div class="flex flex-col gap-3">
-      <Unavailable compact message={`Discussion threads cannot be shown: ${data.reason}.`} />
+      <Unavailable compact message="Discussion content is currently unavailable. You can read or join the discussion on GitHub." />
       <div class="flex flex-wrap gap-2">
         {data.declaredUrl && <Button href={data.declaredUrl} variant="primary" size="sm" rounded="full" external withExternalIcon>{ui.buttons.openDiscussion}</Button>}
         <Button href={data.categoryUrl} variant="secondary" size="sm" rounded="full" external withExternalIcon>Browse collateral proposals</Button>
@@ -36,7 +36,7 @@ const d = data.primary;
           <p class="ty-xs text-[var(--color-gray-75)] mt-1">
             #{d.number} · {d.category} · opened {formatDate(d.createdAt)} by <span class="font-bold">{d.author ?? "ghost"}</span> · {d.commentCount} comments
             {d.upvotes > 0 && <span> · ▲ {d.upvotes}</span>}
-            {d.matchedBy === "heuristic" && <span title="Matched by title; add links.discussion to the assessment to pin it"> · matched by title</span>}
+            {d.matchedBy === "heuristic" && <span title="Suggested by title; verify that this discussion concerns the same asset"> · matched by title</span>}
           </p>
         </div>
         <Button href={d.url} variant="primary" size="sm" rounded="full" external withExternalIcon>Reply on GitHub</Button>

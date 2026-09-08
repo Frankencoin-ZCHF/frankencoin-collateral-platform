@@ -3,14 +3,17 @@
 The public home of everything about the assets that back **Frankencoin (ZCHF)** —
 [collateral.frankencoin.com](https://collateral.frankencoin.com).
 
-- **Overview & dashboard** — every collateral that is assessed and/or live on-chain, with a
-  filterable, sortable, exportable table combining assessment data and live protocol data.
-- **Detail page per collateral** — a decision panel (collateral lifecycle and assessment stage as two
-  independent states, debt, minimum liquidation buffer, deviations, provenance with separate clocks
-  for the assessment snapshot and the live protocol state), the full risk assessment,
-  assessed-vs-on-chain parameters with named verdicts, position safety, live positions and
-  challenges, the community discussion thread, and the complete **version history** with
-  structured + text diffs between any two versions.
+- **Overview** — outstanding exposure, estimated backing and active challenges, followed by
+  underlying-asset concentration and a six-column asset list. Search and filter current backing,
+  proposals/unused facilities or archived assets. The advanced table and CSV export load on demand.
+- **Collateral detail** — an asset description, the author's opening assessment, exposure and
+  price cushion; then positions, assessment findings, and changes/sources. Static price-drop
+  scenarios quantify debt beyond configured liquidation prices, not losses or auction outcomes.
+- **Monitoring & review** — separate financial observations, data-quality limitations and
+  assessment findings. Coverage is weighted by outstanding debt. Reference-price observation
+  times remain separate from fetch times; published assessments do not imply governance approval.
+- **Parameter comparison & history** — compare individual position settings with the assessment,
+  including differing position counts and debt. Full assessment versions have structured and text diffs.
 - **Extensible blocks** — assessment authors add documents, CoinGecko/DefiLlama data, generic API
   values, tables, charts or embeds straight from the assessment markdown
   (see [`docs/content-blocks.md`](docs/content-blocks.md)).
@@ -36,7 +39,7 @@ yarn dev                  # http://localhost:3000
 yarn build && yarn start  # production (node ./dist/server/entry.mjs)
 yarn test                 # unit tests (vitest)
 yarn dev:offline          # no network: local clone of the assessments repo + JSON fixtures (see .env.offline)
-yarn check                # astro check
+yarn run check            # astro check (plain `yarn check` checks dependency integrity)
 ```
 
 Machine-readable endpoints: `/api/collaterals.json`, `/api/collateral/<ticker>.json`, `/health`.

@@ -1,0 +1,124 @@
+---
+import type { LiveCollateral } from "@/types";
+import { priceQuality, priceScenario } from "@/services/monitoring";
+import { formatCompact, formatDateTime, formatNumber, formatPercent, formatPrice } from "@/lib/numbers";
+import { jsonForScript } from "@/lib/html";
+interface Props {
+  live: LiveCollateral;
+}
+const { live } = Astro.props;
+const referencePrice = live.price?.chf ?? 0;
+const positions = live.positions.list
+  .filter((p) => p.status === "active")
+  .map((p) => ({ status: p.status, minted: p.minted, liquidationPriceZchf: p.liquidationPriceZchf }));
+const initial = priceScenario(positions, referencePrice, live.totalMintedZchf, 10);
+const presets = [0, 10, 20, 40]
+  .map((drop) => priceScenario(positions, referencePrice, live.totalMintedZchf, drop))
+  .filter((s) => s !== null);
+const quality = priceQuality(live);
+---
+
+{
+  initial && (
+    <section class="fc-scenario mt-5" aria-labelledby="scenario-title" data-price-scenario>
+      <h4 id="scenario-title" class="ty-title-3 font-bold">
+        What if the price falls?
+      </h4>
+      <p class="ty-small mt-2">
+        Explore debt at or beyond its configured liquidation price. Positions and parameters stay unchanged. This estimates threshold
+        exposure, not liquidation proceeds or losses; comparisons assume 1 ZCHF = 1 CHF.
+      </p>
+      <p class="ty-small text-[var(--color-gray-75)] mt-2">
+        Starting price: {formatPrice(referencePrice)} CHF / {live.symbol}, observed{" "}
+        {quality.state === "invalid-time" ? "at an unverified time" : formatDateTime(live.price?.timestamp)}.{" "}
+        {quality.state !== "current" && "This scenario uses an unverified or outdated reference price."}
+        {(live.reconciliation.divergent || (live.safety?.positionsConsidered ?? 0) < positions.filter((p) => p.minted > 0).length) &&
+          " The position feed is incomplete or some liquidation prices are unavailable; exposure may be understated."}
+      </p>
+      <div class="mt-4" data-scenario-interactive hidden>
+        <>
+          <label for="scenario-drop" class="flex justify-between ty-small font-bold">
+            <>
+              <span>Reference price drop</span>
+              <output data-scenario-drop-label>10%</output>
+            </>
+          </label>
+          <input
+            id="scenario-drop"
+            aria-label="Reference price drop, percent"
+            type="range"
+            min="0"
+            max="80"
+            step="5"
+            value="10"
+            class="w-full mt-3 accent-[var(--color-brand-deep-blue)]"
+          />
+          <p class="ty-body-2 mt-3" aria-live="polite" role="status" data-scenario-result>
+            {formatCompact(initial.debt)} ZCHF ({formatPercent(initial.sharePct, 2)}) across {initial.positions} positions at or beyond
+            their configured liquidation price.
+          </p>
+          <p class="ty-small text-[var(--color-gray-75)] mt-1" data-scenario-price>
+            Scenario price: {formatPrice(initial.priceChf)} CHF
+          </p>
+        </>
+      </div>
+      <details class="mt-4" open data-scenario-presets>
+        <>
+          <summary class="ty-small font-bold cursor-pointer">Compare price scenarios</summary>
+          <div class="overflow-x-auto mt-2">
+            <table class="fc-table">
+              <>
+                <thead>
+                  <tr>
+                    <>
+                      <th>Price drop</th>
+                      <th class="fc-num">Reference CHF price</th>
+                      <th class="fc-num">Debt beyond threshold</th>
+                      <th class="fc-num">Share of asset debt</th>
+                      <th class="fc-num">Positions</th>
+                    </>
+                  </tr>
+                </thead>
+                <tbody>
+                  {presets.map((s) => (
+                    <tr>
+                      <td>{s.dropPct}%</td>
+                      <td class="fc-num">{formatPrice(s.priceChf)}</td>
+                      <td class="fc-num">{formatCompact(s.debt)} ZCHF</td>
+                      <td class="fc-num">{formatPercent(s.sharePct, 2)}</td>
+                      <td class="fc-num">{formatNumber(s.positions, 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </>
+            </table>
+          </div>
+        </>
+      </details>
+      <script
+        is:inline
+        type="application/json"
+        data-scenario-input
+        set:html={jsonForScript({ positions, referencePrice, totalDebt: live.totalMintedZchf })}
+      />
+    </section>
+  )
+}
+<script>
+  import { priceScenario } from "@/services/monitoring";
+  import { formatCompact, formatPercent, formatPrice } from "@/lib/numbers";
+  document.querySelectorAll<HTMLElement>("[data-price-scenario]").forEach((root) => {
+    const input = JSON.parse(root.querySelector("[data-scenario-input]")?.textContent ?? "{}");
+    const control = root.querySelector<HTMLInputElement>("input[type=range]");
+    root.querySelector<HTMLElement>("[data-scenario-interactive]")?.removeAttribute("hidden");
+    root.querySelector<HTMLDetailsElement>("[data-scenario-presets]")?.removeAttribute("open");
+    control?.addEventListener("input", () => {
+      const s = priceScenario(input.positions, input.referencePrice, input.totalDebt, Number(control.value));
+      if (!s) return;
+      root.querySelector("[data-scenario-drop-label]")!.textContent = `${s.dropPct}%`;
+      root.querySelector("[data-scenario-result]")!.textContent =
+        `${formatCompact(s.debt)} ZCHF (${formatPercent(s.sharePct, 2)}) across ${s.positions} position${s.positions === 1 ? "" : "s"} at or beyond their configured liquidation price.`;
+      root.querySelector("[data-scenario-price]")!.textContent = `Scenario price: ${formatPrice(s.priceChf)} CHF`;
+    });
+  });
+</script>

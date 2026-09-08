@@ -1,27 +1,25 @@
-/**
- * Defers AG Grid: the SSR table is the immediate default; the interactive grid loads on
- * first interaction with the toolbar/table or, failing that, when the browser is idle.
- */
-
-const grid = document.getElementById("collateral-grid");
-
-if (grid) {
+/** Specialist grid is only requested when its disclosure is opened. Basic browsing stays light. */
+const section = document.getElementById("advanced-grid") as HTMLDetailsElement | null;
+if (section) {
   let started = false;
-  const start = () => {
-    if (started) return;
+  async function load() {
+    if (!section?.open || started) return;
     started = true;
-    import("./collateral-grid").then((m) => m.mount());
-  };
-
-  const triggers = ["#grid-search", "[data-chip]", "#grid-export", "#grid-reset", "[data-grid-fallback]", "details > summary"];
-  for (const sel of triggers) {
-    document.querySelectorAll(sel).forEach((el) => {
-      el.addEventListener("pointerenter", start, { once: true, passive: true });
-      el.addEventListener("focusin", start, { once: true });
-      el.addEventListener("click", start, { once: true });
-    });
+    const status = document.getElementById("advanced-grid-status");
+    if (status) status.textContent = "Loading advanced table…";
+    try {
+      (await import("./collateral-grid")).mount();
+      section.querySelectorAll<HTMLInputElement | HTMLButtonElement>("[disabled]").forEach((el) => {
+        el.disabled = false;
+      });
+      if (status) status.hidden = true;
+    } catch {
+      started = false;
+      if (status)
+        status.textContent =
+          "The advanced table could not be loaded. Close and reopen this section to retry. The asset overview remains available.";
+    }
   }
-  const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
-  if (idle) idle(start, { timeout: 4000 });
-  else setTimeout(start, 2500);
+  section.addEventListener("toggle", load);
+  void load();
 }

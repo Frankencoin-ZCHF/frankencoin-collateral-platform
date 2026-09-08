@@ -1,16 +1,17 @@
 ---
 /* Grouped "items requiring attention" list: one collapsible row per collateral. */
 import Pill from "@/components/Pill.astro";
-import type { AttentionGroup } from "@/services/attention";
+import type { AttentionGroup, Queue } from "@/services/attention";
 
 interface Props {
   groups: AttentionGroup[];
+  queue?: Queue;
   /** Open every group by default. */
   expanded?: boolean;
 }
-const { groups, expanded = false } = Astro.props as Props;
+const { groups, expanded = false, queue = "live" } = Astro.props as Props;
 const SEV_BAR: Record<string, string> = { high: "bg-red-500", medium: "bg-amber-400", low: "bg-[var(--color-neutral-300)]" };
-/** Both queues render on one page, so element ids are namespaced per queue; the hash form is `#<slug>` (opens the group in every queue it appears in). */
+/** Each queue has unique deep links; legacy #<slug> links reveal the first matching group. */
 ---
 
 <div x-data="{ open: false, toggleAll() { this.open = !this.open; $el.querySelectorAll('details').forEach(d => d.open = this.open) } }" x-init={expanded ? "open = true" : undefined}>
@@ -23,12 +24,12 @@ const SEV_BAR: Record<string, string> = { high: "bg-red-500", medium: "bg-amber-
   }
   {
     groups.length === 0 ? (
-      <p class="ty-small text-[var(--color-gray-75)]">Nothing requires attention at the current oracle prices.</p>
+      <p class="ty-small text-[var(--color-gray-75)]">No findings in this category in the available data. Check monitoring coverage before interpreting this result.</p>
     ) : (
       <ul class="flex flex-col divide-y divide-[var(--color-gray-20)]">
         {groups.map((g) => (
           <li>
-            <details class="group scroll-mt-24" data-slug={g.slug} open={expanded} x-data x-init="if (window.location.hash === '#' + $el.dataset.slug) { $el.open = true; if (!window.__fcScrolled) { window.__fcScrolled = true; $el.scrollIntoView({ block: 'start' }) } }">
+            <details id={`${queue}-${g.slug}`} class="group scroll-mt-24" data-slug={g.slug} open={expanded}>
               <summary class="list-none cursor-pointer flex items-center gap-3 py-2.5 -mx-2 px-2 rounded-md hover:bg-[var(--color-gray-10)] target:bg-[var(--color-gray-10)]">
                 <span class={`h-5 w-1 shrink-0 rounded-full ${SEV_BAR[g.severity]}`} aria-label={`${g.severity} severity`} />
                 <a href={`/collateral/${g.slug}`} class="ty-small font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)] w-16 shrink-0" @click.stop>{g.ticker}</a>
@@ -36,7 +37,7 @@ const SEV_BAR: Record<string, string> = { high: "bg-red-500", medium: "bg-amber-
                   <Pill value={g.lifecycle} class="!text-[10px] !py-0" />
                   <Pill value={g.assessmentStatus === "none" ? "no assessment" : g.assessmentStatus} kind={g.assessmentStatus} class="!text-[10px] !py-0" />
                 </span>
-                <span class="ty-xs text-[var(--color-neutral-650)] truncate min-w-0 flex-1">{g.items.map((it) => it.title.replace(/ (differs from draft proposal|deviates from the published assessment)$/, "")).join(" · ")}</span>
+                <span class="ty-xs text-[var(--color-neutral-650)] truncate min-w-0 flex-1">{g.items.map((it) => it.title.replace(/ (differs from draft proposal|differs from assessment)$/, "")).join(" · ")}</span>
                 <span class="ty-2xs text-[var(--color-gray-60)] shrink-0 tabular-nums">{g.items.length}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 shrink-0 text-[var(--color-gray-60)] transition-transform group-open:rotate-180" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" /></svg>
               </summary>
@@ -46,8 +47,8 @@ const SEV_BAR: Record<string, string> = { high: "bg-red-500", medium: "bg-amber-
                     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
                       <span class={`ty-small font-bold ${it.severity === "high" ? "text-red-800" : "text-[var(--color-neutral-700)]"}`}>{it.title}</span>
                       {(it.assessed || it.live) && (
-                        <span class="ty-xs tabular-nums whitespace-nowrap text-[var(--color-neutral-650)]">
-                          {it.assessed && <><span class="text-[var(--color-gray-60)]">assessed </span>{it.assessed}</>}
+                        <span class="ty-xs tabular-nums text-[var(--color-neutral-650)]">
+                          {it.assessed && <><span class="text-[var(--color-gray-60)]">assessment </span>{it.assessed}</>}
                           {it.assessed && it.live && <span class="text-[var(--color-gray-60)]"> → </span>}
                           {it.live && <><span class="text-[var(--color-gray-60)]">live </span>{it.live}</>}
                         </span>

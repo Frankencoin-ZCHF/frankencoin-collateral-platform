@@ -1,52 +1,109 @@
 ---
-/* SSR fallback table for the overview (crawlers, no-JS, and the default until the grid loads). */
 import type { CollateralRow } from "@/lib/rows";
-import { formatCompact, formatPercent, formatPrice } from "@/lib/numbers";
-import Pill from "./Pill.astro";
-
+import { matchesFilters, type CollateralView } from "@/lib/collateral-filters";
+import { formatCompact, formatDate, formatPercent } from "@/lib/numbers";
 interface Props {
   rows: CollateralRow[];
+  view?: CollateralView;
+  query?: string;
+  group?: string;
 }
-const { rows } = Astro.props as Props;
+const { rows, view = "current", query = "", group = "all" } = Astro.props;
 ---
 
-<div data-grid-fallback class="overflow-x-auto rounded-xl border border-[var(--color-gray-20)]">
-  <table class="fc-table">
-    <thead>
-      <tr>
-        <th>Ticker</th>
-        <th>Lifecycle</th>
-        <th>Assessment</th>
-        <th>Live risk</th>
-        <th class="fc-num">Minted ZCHF</th>
-        <th class="fc-num" title="Price drop until the riskiest active position becomes challengeable">Min. liq. buffer</th>
-        <th class="fc-num">Open positions</th>
-        <th class="fc-num">Oracle price CHF</th>
-        <th class="fc-num" title="Assessment-review items">Review</th>
-      </tr>
-    </thead>
-    <tbody>
+<div data-overview-table class="fc-card overflow-hidden">
+  <table class="fc-table fc-collateral-table" role="table" aria-label="Collateral assets">
+    <thead role="rowgroup"
+      ><tr role="row"
+        ><th scope="col" role="columnheader">Asset</th><th scope="col" role="columnheader" class="fc-num">ZCHF exposure</th><th
+          scope="col"
+          role="columnheader"
+          class="fc-num">Estimated backing</th
+        ><th scope="col" role="columnheader">Price cushion / backing</th><th scope="col" role="columnheader">Current findings</th><th
+          scope="col"
+          role="columnheader">Assessment</th
+        ></tr
+      ></thead
+    >
+    <tbody role="rowgroup">
       {
         rows.map((r) => (
-          <tr>
-            <td>
-              <a href={r.url} class="font-bold text-[var(--color-brand-deep-blue)] hover:text-[var(--color-brand-swiss)]">{r.ticker}</a>
-              <span class="block ty-2xs text-[var(--color-gray-60)]">{r.name}</span>
+          <tr role="row" data-collateral-row={r.slug} hidden={!matchesFilters(r, view, query, group)}>
+            <td role="cell" data-label="Asset">
+              <>
+                <a
+                  href={r.url}
+                  class="font-bold text-[var(--color-brand-deep-blue)] underline decoration-transparent hover:decoration-current"
+                >
+                  {r.name} <span class="font-normal">({r.ticker})</span>
+                </a>
+                <span class="fc-cell-note">
+                  {r.assetType}
+                  {r.lifecycle !== "live" && ` · ${r.lifecycle}`}
+                </span>
+              </>
             </td>
-            <td><Pill value={r.isBridge ? `${r.lifecycle} · 1:1 bridge` : r.lifecycle} kind={r.lifecycle} /></td>
-            <td><Pill value={r.status === "none" ? (r.assessmentUnavailable ? "unavailable" : "none") : r.status} kind={r.status === "none" && r.assessmentUnavailable ? "neutral" : r.status} /></td>
-            <td>
-              {r.liveRiskState === "ok" ? (
-                <span class="fc-pill fc-pill-strong" title="No live risk items at the current oracle price">ok</span>
+            <td role="cell" data-label="ZCHF exposure" class="fc-num">
+              <>
+                <strong>{formatCompact(r.mintedZchf)}</strong>
+                <span class="fc-cell-note">
+                  {r.sharePct === null ? "Share unavailable" : `${formatPercent(r.sharePct, 1)} of total exposure`}
+                </span>
+              </>
+            </td>
+            <td role="cell" data-label="Estimated backing" class="fc-num">
+              {r.collateralValueChf === null ? "Unavailable" : `${formatCompact(r.collateralValueChf)} CHF`}
+              <span class="fc-cell-note">
+                {r.priceQuality === "current" ? "At reference market price" : "Valuation needs verification"}
+              </span>
+            </td>
+            <td role="cell" data-label="Price cushion / backing">
+              {r.isBridge ? (
+                <>
+                  <strong>1:1 stablecoin backing</strong>
+                  <span class="fc-cell-note">Issuer and redemption exposure</span>
+                </>
               ) : (
-                <a href={r.attentionUrl} class={`fc-pill ${r.liveRiskState === "risk" ? "fc-pill-insufficient" : "fc-pill-sufficient"}`} title={r.liveRisk.join("\n")}>{r.liveRiskState === "risk" ? "risk" : "watch"} · {r.liveRiskCount}</a>
+                <>
+                  <strong>{formatPercent(r.minLiquidationBufferPct, 1)}</strong>
+                  <span class="fc-cell-note">
+                    {r.debtWithin10Pct == null
+                      ? "Position monitoring unavailable"
+                      : `${formatCompact(r.debtWithin10Pct)} ZCHF (${formatPercent(r.mintedZchf ? (r.debtWithin10Pct / r.mintedZchf) * 100 : null, 1)} of asset debt) within 10%`}
+                    {r.priceQuality !== "current" && " · last observed price"}
+                  </span>
+                </>
               )}
             </td>
-            <td class="fc-num">{formatCompact(r.mintedZchf)}</td>
-            <td class={`fc-num ${r.minLiquidationBufferPct != null && r.minLiquidationBufferPct < 5 ? "text-red-700" : ""}`}>{r.isBridge ? <span class="ty-2xs text-[var(--color-gray-60)]">n/a (1:1)</span> : formatPercent(r.minLiquidationBufferPct, 1)}</td>
-            <td class="fc-num">{r.positionsOpen ?? "–"}</td>
-            <td class="fc-num">{formatPrice(r.priceChf)}</td>
-            <td class="fc-num">{r.reviewCount ? <a href={r.attentionUrl} class="fc-pill fc-pill-neutral" title={r.review.join("\n")}>{r.reviewCount}</a> : "–"}</td>
+            <td role="cell" data-label="Current findings">
+              <a
+                href={r.attentionUrl}
+                class={`fc-finding ${r.liveRiskState === "risk" ? "text-red-800" : r.liveRiskState === "watch" || r.liveRiskState === "unknown" ? "text-amber-900" : "text-[var(--color-neutral-650)]"}`}
+              >
+                {r.monitoringLabel}
+              </a>
+              {r.dataQualityCount > 0 && (
+                <span class="fc-cell-note">
+                  {r.dataQualityCount} data-quality finding{r.dataQualityCount === 1 ? "" : "s"}
+                </span>
+              )}
+            </td>
+            <td role="cell" data-label="Assessment">
+              <>
+                <a href={`${r.url}#assessment`} class="underline decoration-dotted">
+                  {r.assessmentUnavailable
+                    ? "Unavailable"
+                    : r.status === "none"
+                      ? "Missing"
+                      : r.status === "draft"
+                        ? "Draft"
+                        : r.status === "published"
+                          ? "Published"
+                          : "Archived"}
+                </a>
+                <span class="fc-cell-note">{r.assessedOn ? formatDate(r.assessedOn) : "No assessment date"}</span>
+              </>
+            </td>
           </tr>
         ))
       }

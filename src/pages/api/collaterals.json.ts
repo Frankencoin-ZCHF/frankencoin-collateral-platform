@@ -9,6 +9,7 @@ export const prerender = false;
 export const GET: APIRoute = async () => {
   try {
     const set = await collaterals.all();
+    const summary = collaterals.summarize(set.records);
     const body = {
       ok: true,
       generatedAt: new Date().toISOString(),
@@ -16,10 +17,10 @@ export const GET: APIRoute = async () => {
       protocolFetchedAt: set.protocolFetchedAt,
       warnings: set.warnings,
       integrity: set.records.filter((r) => r.issues.some((i) => i.severity !== "low")).map((r) => ({ slug: r.slug, issues: r.issues.filter((i) => i.severity !== "low") })),
-      summary: collaterals.summarize(set.records),
-      attention: summarizeAttention(set.records),
+      summary,
+      attention: summarizeAttention(set.records, set.unattributedActiveChallenges),
       count: set.records.length,
-      collaterals: set.records.map(toRow),
+      collaterals: set.records.map((r) => toRow(r, summary.totalMintedZchf)),
     };
     return new Response(JSON.stringify(body), {
       headers: {

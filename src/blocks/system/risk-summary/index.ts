@@ -12,7 +12,7 @@ const riskSummary: SystemBlock<RiskSummaryData> = {
   id: "risk-summary",
   title: "Risk assessment",
   order: 10,
-  span: "half",
+  span: "full",
   enabled: (ctx) => ctx.assessment !== null,
   load: async (ctx) => {
     const a = ctx.assessment!;

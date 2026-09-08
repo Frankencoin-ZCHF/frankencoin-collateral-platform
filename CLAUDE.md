@@ -22,7 +22,7 @@ yarn install
 yarn dev                 # http://localhost:3000 (PORT env overrides)
 yarn dev:offline         # no network: assessments from a local clone + protocol fixtures (.env.offline)
 yarn build && yarn start # production: node ./dist/server/entry.mjs
-yarn check               # astro check (types across .astro/.ts)
+yarn run check           # astro check (plain `yarn check` checks dependencies)
 yarn audit --level moderate   # must be clean — CI fails otherwise
 yarn test                # vitest, all suites
 yarn test test/protocol.test.ts    # one file
@@ -61,7 +61,7 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
   token: it stays assessment-only with an `address-mismatch` issue pointing at the live record.
   `deriveLifecycle()` gives every record a collateral lifecycle (draft/proposed/live/closed/denied)
   from protocol counts — independent of the assessment stage. `issuesFor()` produces integrity
-  issues (future date, feed divergence, live without published assessment). `summarize()` feeds the
+  issues (price freshness, feed divergence, missing or unavailable assessments). `summarize()` feeds the
   KPIs. Unlisted tokens with no active positions (ZEUS/HPS…) are dropped.
 - `src/services/bridges.ts` — **VCHF and CHFAU are not collaterals but 1:1 StablecoinBridge minters** (discovered
   from Ponder `frankencoinMinters` with "bridge" in the application message; `horizon/limit/minted/chf` read
@@ -70,10 +70,14 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
   live/closed(expired)/proposed, and the detail page shows the `bridge` block instead of the position
   blocks. Risk = source-stablecoin issuer/peg/freeze risk up to `minted`; `bridge-peg` (>1 % off 1 CHF)
   is a live-queue issue, "expires in ≤60 days" a review item. Selectors are verified by test/bridges.test.ts.
-- `src/services/comparison.ts` — assessed-vs-on-chain with named verdicts (`matches`,
-  `within-range`, `differs`, `not-comparable`, `unavailable`) and one-sentence explanations;
-  `src/services/attention.ts` turns issues, deviations and near-liquidation debt into the
-  dashboard's "Items requiring attention".
+- `src/services/comparison.ts` — compares individual active positions with the assessment;
+  verdicts distinguish exact matches, display tolerance, conservative uniform values, varied
+  positions and differences. Each row lists differing position links and their outstanding debt.
+- `src/services/monitoring.ts` — reference-price quality, exposure-weighted monitoring coverage,
+  underlying-asset concentration, and static price-drop scenarios. Freshness windows are explicit
+  UI monitoring settings in `src/lib/assets.ts` (1 hour for crypto/bridges, 24 for gold/unknown,
+  72 for shares/ETF exposure), not guarantees of liquidity. Taxonomy uses contract identity.
+  Scenario debt is static threshold exposure, never a loss forecast; assume 1 ZCHF = 1 CHF.
 - `src/services/discussions.ts` — GraphQL only (needs token). Thread resolution: explicit
   `links.discussion` URL in the frontmatter → else `matchThreads()` heuristic on the
   "Acceptable Collaterals" category titles.
@@ -91,6 +95,7 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
   `JSON.stringify` output.
 - CSP (`src/middleware.ts`): production `script-src 'self' 'unsafe-eval'` — **no inline scripts**
   (use Alpine attributes or module scripts); `'unsafe-eval'` is Alpine's expression evaluator.
+  `vite.build.assetsInlineLimit: 0` keeps Astro from inlining small module scripts at build time.
 - Author URLs (content blocks): only via `safeFetchJson` in `src/upstream/generic.ts` — an undici
   agent whose DNS lookup rejects private ranges at connect time, manual redirects re-validated per
   hop, and a production host allowlist (`DEFAULT_ALLOWED_HOSTS` / `BLOCK_FETCH_ALLOWED_HOSTS`).
@@ -112,10 +117,11 @@ renders an "unavailable" card, never a 500.
 
 ### Client islands
 
-Heavy libraries are lazy chunks: `grid-loader.ts` imports `collateral-grid.ts` (AG Grid, ~1 MB) on
-first toolbar/table interaction or when idle; `charts-loader.ts` imports `charts.ts` (ECharts) when a
-`[data-chart]` scrolls into view. The SSR table is the default until then. Alpine is bundled from
-npm (no CDN).
+Basic browsing uses a six-column SSR table plus lightweight `overview.ts` filters; URL parameters
+preserve search, exposure group and view. Current backing includes any outstanding debt even if
+minting has ended. AG Grid loads only when “Advanced data & export” opens (`grid-loader.ts`).
+`charts-loader.ts` imports ECharts when a detail-page `[data-chart]` scrolls into view.
+`detail-navigation.ts` opens disclosures for deep links. Alpine is bundled from npm (no CDN).
 
 ## Gotchas
 
@@ -131,9 +137,18 @@ npm (no CDN).
   `retained_reserve`/`target_interest_rate` are fractions (`0.25`, `0.0075`) — `lib/normalize.ts`
   turns everything into percents; `Assessment.raw` keeps the verbatim object for diffs.
 - raw.githubusercontent.com answers in 4–8 s per file; `upstream/github.ts` limits raw fetches to 4 in flight with a 20 s timeout. A partial index (transient fetch failures) is dropped from the cache after 30 s and the affected collaterals show "assessment temporarily unavailable" instead of "no assessment".
-- Attention is ONE list in TWO queues (`services/attention.ts`): `live` (challenges, debt near liquidation, stale/divergent data, address mismatch, no assessment at all, deviations from a *published* assessment) and `review` (differences from a *draft* proposal, missing governance reference). The table's "Live risk"/"Review" cells, the decision panel, the dashboard tiles and `/attention#live|#review` all derive from it, so counts always agree. `record.issues` (integrity issues) are always live-queue.
+- Findings share one model in THREE queues (`services/attention.ts`): `live` = financial
+  observations (challenges, debt near liquidation, peg changes); `data` = unavailable, stale,
+  unverified or divergent data; `review` = missing assessments, parameter differences, governance
+  references and bridge expiry. Publication is not governance approval. All views derive their
+  counts from this model, including active challenges that cannot be attributed to a collateral.
+  Queue-specific hashes (`#data-wbtc`, etc.) open the relevant group; legacy slug hashes still work.
+- Missing/stale/future-dated prices must never produce a reassuring monitoring status. Compare
+  source observation time, not response fetch time. Coverage excludes incomplete sources and
+  positions without liquidation prices. A valid active financial alert stays visible with its
+  data limitations. Asset descriptions and excerpts must preserve source meaning and sanitisation.
 - Timestamp ordering is NOT an integrity rule: assessment date, commit time and live fetch time are separate provenance clocks. A future assessment date is a note beside the date (likely typo), never an attention item — but a *published* assessment with a future date is rejected at parse time.
-- Comparison wording depends on the assessment stage (`compareParameters(..., status)`): against a draft, never say "less conservative"/"deviates" — say "differs from draft proposal".
+- Comparison wording depends on the assessment stage (`compareParameters(..., status)`): use "draft proposal", "published assessment" or "archived assessment". Display tolerances are not governance rules.
 - Real assessment files don't always follow the template headings (e.g. no `## Tail Risks`
   wrapper) — never key logic on heading text.
 - `/prices/list` may list a token twice (cbBTC); the map is keyed by address so last write wins.

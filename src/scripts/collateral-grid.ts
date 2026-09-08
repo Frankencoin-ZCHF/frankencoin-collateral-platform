@@ -78,22 +78,14 @@ function tickerCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
   return a;
 }
 
-/** Live-risk state: ok / watch / risk with the count of live-risk items; links to /attention#<slug>. */
+/** Precise finding label; incomplete monitoring never receives a reassuring pill. */
 function liveRiskCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
-  const d = p.data;
-  const state = d?.liveRiskState ?? "ok";
-  if (state === "ok") {
-    const span = document.createElement("span");
-    span.className = "fc-pill fc-pill-strong";
-    span.textContent = "ok";
-    span.title = "No live risk items at the current oracle price";
-    return span;
-  }
   const a = document.createElement("a");
-  a.href = d?.attentionUrl ?? "/attention";
-  a.className = `fc-pill ${state === "risk" ? "fc-pill-insufficient hover:bg-red-200" : "fc-pill-sufficient hover:bg-amber-200"}`;
-  a.textContent = `${state === "risk" ? "risk" : "watch"} · ${d?.liveRiskCount ?? 0}`;
-  a.title = (d?.liveRisk ?? []).join("\n");
+  const state = p.data?.liveRiskState;
+  a.href = p.data?.attentionUrl ?? "/attention";
+  a.className = `fc-finding ${state === "risk" ? "text-red-800" : state === "watch" || state === "unknown" ? "text-amber-900" : "text-[var(--color-neutral-650)]"}`;
+  a.textContent = p.data?.monitoringLabel ?? "Monitoring unavailable";
+  a.title = p.data?.monitoringDetail ?? "";
   return a;
 }
 
@@ -122,7 +114,7 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
       { field: "name", headerName: "Name", width: 190 },
       { field: "lifecycle", headerName: "Lifecycle", width: 150, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value, p.data?.isBridge ? `${p.value} · 1:1 bridge` : undefined), headerTooltip: "Collateral lifecycle from protocol state. '1:1 bridge' = a StablecoinBridge minter, not a collateralised position." },
       { field: "status", headerName: "Assessment", width: 125, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value, p.value === "none" ? "none" : undefined) },
-      { field: "liveRiskState", headerName: "Live risk", width: 115, cellRenderer: liveRiskCell, headerTooltip: "Live risk now: active challenges, debt close to liquidation, stale or divergent data, integrity exceptions. Click to open the items." },
+      { field: "liveRiskState", headerName: "Current findings", width: 220, cellRenderer: liveRiskCell, headerTooltip: "Financial monitoring findings and data-quality limitations. Click for details." },
       { field: "reviewCount", headerName: "Review", width: 90, type: "num", cellRenderer: reviewCell, headerTooltip: "Assessment-review items: differences against a draft proposal, missing governance reference.", hide: true },
       { field: "assessedOn", headerName: "Assessed on", width: 120, valueFormatter: date, filter: "agDateColumnFilter", hide: true },
     ],
@@ -132,8 +124,8 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
     children: [
       { field: "freeFloat", headerName: "Free float", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value), hide: true },
       { field: "publicInformation", headerName: "Public info", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value), hide: true },
-      { field: "marketRiskPct", headerName: "48h downside", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Observed 48-hour downside (max drawdown / 99% VaR over 2× auction duration)", hide: true },
-      { field: "retainedReservePct", headerName: "Assessed reserve", width: 135, type: "num", valueFormatter: pct(1), headerTooltip: "Retained reserve proposed by the assessment (collateral haircut)", hide: true },
+      { field: "marketRiskPct", headerName: "Observed downside", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Historical downside from the assessment, measured over twice its proposed auction duration. Not a future loss ceiling.", hide: true },
+      { field: "retainedReservePct", headerName: "Assessed reserve", width: 135, type: "num", valueFormatter: pct(1), headerTooltip: "Share of minted ZCHF proposed to be retained for liquidation outcomes", hide: true },
       { field: "targetRatePct", headerName: "Assessed premium", width: 140, type: "num", valueFormatter: pct(2), headerTooltip: "Assessed target risk premium above the lead rate", hide: true },
       { field: "totalCompensationPct", headerName: "Tail-risk comp.", width: 130, type: "num", valueFormatter: pct(2), hide: true },
       { field: "liquidationPriceAssessed", headerName: "Liq. price (assessed)", width: 150, type: "num", valueFormatter: price, hide: true },
@@ -145,20 +137,20 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
   {
     headerName: "On-chain (Ethereum)",
     children: [
-      { field: "priceChf", headerName: "Oracle price CHF", width: 135, type: "num", valueFormatter: price, headerTooltip: "Current protocol oracle price per unit of collateral" },
+      { field: "priceChf", headerName: "Reference CHF price", width: 135, type: "num", valueFormatter: price, headerTooltip: "Market price used for display and monitoring, not an automatic liquidation trigger" },
       { field: "priceUsd", headerName: "Price USD", width: 120, type: "num", valueFormatter: price, hide: true },
       { field: "change24hPct", headerName: "24h", width: 90, type: "num", valueFormatter: pct(1), cellClassRules: { "text-emerald-700": (p) => (p.value ?? 0) > 0, "text-red-700": (p) => (p.value ?? 0) < 0 }, hide: true },
       { field: "positionsOpen", headerName: "Open positions", width: 125, type: "num", valueFormatter: num(0) },
       { field: "mintedZchf", headerName: "Minted ZCHF", width: 125, type: "num", valueFormatter: compact },
-      { field: "collateralValueChf", headerName: "Oracle-valued collateral", width: 170, type: "num", valueFormatter: compact, headerTooltip: "Collateral quantity × current oracle price", hide: true },
-      { field: "minLiquidationBufferPct", headerName: "Min. liq. buffer", width: 130, type: "num", valueFormatter: (p: Num) => (p.data?.isBridge ? "n/a (1:1)" : p.value == null ? "–" : formatPercent(p.value, 1)), headerTooltip: "Minimum liquidation buffer: price drop until the riskiest active position becomes challengeable", cellClassRules: { "text-red-700": (p) => p.value != null && p.value < 5, "text-amber-700": (p) => p.value != null && p.value >= 5 && p.value < 15 } },
+      { field: "collateralValueChf", headerName: "Estimated collateral value", width: 170, type: "num", valueFormatter: compact, headerTooltip: "Collateral quantity × last observed reference price", hide: true },
+      { field: "minLiquidationBufferPct", headerName: "Nearest price cushion", width: 130, type: "num", valueFormatter: (p: Num) => (p.data?.isBridge ? "n/a (1:1)" : p.value == null ? "–" : formatPercent(p.value, 1)), headerTooltip: "Minimum liquidation buffer: reference-price distance to the highest configured liquidation price", cellClassRules: { "text-red-700": (p) => p.value != null && p.value < 5, "text-amber-700": (p) => p.value != null && p.value >= 5 && p.value < 15 } },
       { field: "debtWithin10Pct", headerName: "Debt ≤10% of liq.", width: 140, type: "num", valueFormatter: compact, hide: true },
       { field: "weightedCollateralRatioPct", headerName: "Collateralisation", width: 135, type: "num", valueFormatter: pct(0), hide: true },
-      { field: "utilizationPct", headerName: "Utilisation", width: 110, type: "num", valueFormatter: pct(1), headerTooltip: "Debt ÷ oracle-valued collateral", hide: true },
+      { field: "utilizationPct", headerName: "Debt / collateral value", width: 110, type: "num", valueFormatter: pct(1), headerTooltip: "Debt ÷ reference-priced collateral", hide: true },
       { field: "riskPremiumAvgPct", headerName: "Live premium", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Live position-weighted risk premium", hide: true },
       { field: "annualInterestAvgPct", headerName: "Total borrowing rate", width: 150, type: "num", valueFormatter: pct(2), headerTooltip: "Lead rate + position premium, minted-weighted", hide: true },
       { field: "reserveContributionAvgPct", headerName: "Live reserve", width: 115, type: "num", valueFormatter: pct(1), hide: true },
-      { field: "remainingLimitZchf", headerName: "Remaining agg. limit", width: 150, type: "num", valueFormatter: compact, headerTooltip: "Additional ZCHF mintable against this collateral under the current total limit", hide: true },
+      { field: "remainingLimitZchf", headerName: "Remaining agg. limit", width: 150, type: "num", valueFormatter: compact, headerTooltip: "Unused aggregate limit; actual borrowing depends on position terms and collateral", hide: true },
       { field: "totalLimitZchf", headerName: "Aggregate limit", width: 130, type: "num", valueFormatter: compact, hide: true },
       { field: "collateralAmount", headerName: "Collateral (units)", width: 140, type: "num", valueFormatter: (p: Num) => (p.value == null ? "–" : formatNumber(p.value, p.value < 10 ? 4 : 2)), hide: true },
       { field: "liquidationPriceMin", headerName: "Liq. price min", width: 125, type: "num", valueFormatter: price, hide: true },
@@ -184,14 +176,8 @@ export function mount() {
   const el = document.getElementById("collateral-grid");
   const dataEl = document.getElementById("grid-data");
   if (!el || !dataEl || el.dataset.mounted) return;
-  el.dataset.mounted = "1";
 
-  let rows: CollateralRow[] = [];
-  try {
-    rows = JSON.parse(dataEl.textContent ?? "[]");
-  } catch {
-    return;
-  }
+  const rows: CollateralRow[] = JSON.parse(dataEl.textContent ?? "[]");
 
   const chips: Chips = { lifecycle: "all", status: "all", classification: "all", issuesOnly: false };
   const STORAGE_KEY = "fc-collaterals-grid-columns-v3";
@@ -201,10 +187,10 @@ export function mount() {
     rowData: rows,
     columnDefs,
     columnTypes: { num: { cellClass: "fc-num", filter: "agNumberColumnFilter", headerClass: "ag-right-aligned-header" } },
-    defaultColDef: { sortable: true, resizable: true, filter: true, minWidth: 80 },
+    defaultColDef: { sortable: true, resizable: true, filter: true, minWidth: 80, wrapHeaderText: true, autoHeaderHeight: true },
     domLayout: "autoHeight",
     animateRows: false,
-    suppressCellFocus: true,
+    suppressCellFocus: false,
     enableCellTextSelection: true,
     tooltipShowDelay: 300,
     getRowId: (p) => p.data.slug,
@@ -231,7 +217,7 @@ export function mount() {
 
   const api = createGrid(el, options);
 
-  document.querySelector<HTMLElement>("[data-grid-fallback]")?.setAttribute("hidden", "");
+  el.dataset.mounted = "1";
   el.removeAttribute("hidden");
 
   const search = document.getElementById("grid-search") as HTMLInputElement | null;
@@ -274,7 +260,7 @@ export function mount() {
       const cb = document.createElement("input");
       cb.type = "checkbox";
       cb.className = "accent-[var(--color-brand-swiss)]";
-      cb.checked = !col.hide;
+      cb.checked = api.getColumn(id)?.isVisible() ?? !col.hide;
       cb.dataset.col = id;
       cb.addEventListener("change", () => api.setColumnsVisible([id], cb.checked));
       label.append(cb, document.createTextNode(col.headerName ?? id));

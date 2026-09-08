@@ -15,7 +15,7 @@ const total = l.counts?.total ?? l.positions.total;
 
 <div class="fc-kv !grid-cols-2 lg:!grid-cols-3">
   <div>
-    <p class="fc-kv-label">Oracle price</p>
+    <p class="fc-kv-label">Reference market price</p>
     <p class="fc-kv-value">{l.price ? `${formatPrice(l.price.chf)} CHF` : "–"}</p>
     <p class="fc-kv-unit">
       {l.price && `$${formatPrice(l.price.usd)}`}
@@ -33,7 +33,7 @@ const total = l.counts?.total ?? l.positions.total;
     <p class="fc-kv-unit">{l.totalLimitZchf === null ? "aggregate limit unknown" : `of ${formatCompact(l.totalLimitZchf)} ZCHF total limit`}</p>
   </div>
   <div>
-    <p class="fc-kv-label">Oracle-valued collateral</p>
+    <p class="fc-kv-label">Estimated collateral value</p>
     <p class="fc-kv-value">{l.collateralValueChf === null ? "–" : `${formatCompact(l.collateralValueChf)} CHF`}</p>
     <p class="fc-kv-unit">{formatNumber(l.totalCollateral, l.totalCollateral < 10 ? 4 : 2)} {l.symbol} locked</p>
   </div>
@@ -43,9 +43,9 @@ const total = l.counts?.total ?? l.positions.total;
     <p class="fc-kv-unit">{total} total{l.counts ? ` · ${l.counts.originals} original / ${l.counts.clones} clones` : ""}</p>
   </div>
   <div>
-    <p class="fc-kv-label">Utilisation</p>
+    <p class="fc-kv-label">Debt / collateral value</p>
     <p class="fc-kv-value">{formatPercent(l.utilizationPct, 1)}</p>
-    <p class="fc-kv-unit">debt ÷ oracle-valued collateral</p>
+    <p class="fc-kv-unit">debt ÷ reference-priced collateral</p>
   </div>
   <div>
     <p class="fc-kv-label">Live position-weighted premium</p>

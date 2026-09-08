@@ -1,0 +1,95 @@
+---
+import type { BlockContext } from "@/blocks/types";
+import CopyButton from "./CopyButton.astro";
+import { ETHERSCAN } from "@/lib/constants";
+import { formatDate, formatDateTime, shortAddress } from "@/lib/numbers";
+import * as assessments from "@/services/assessments";
+interface Props {
+  ctx: BlockContext;
+}
+const { ctx } = Astro.props;
+const { record, assessment, version, versions, isHistorical } = ctx;
+const latest = versions[0];
+---
+
+<div class="flex flex-col gap-4">
+  {
+    record.address && (
+      <div class="flex flex-wrap items-center gap-2 ty-small">
+        <>
+          <span>Token contract</span>
+          <span class="font-mono">{shortAddress(record.address, 8)}</span>
+          <CopyButton value={record.address} />
+          <a class="underline" href={`${ETHERSCAN}/token/${record.address}`} target="_blank" rel="noopener noreferrer">
+            Etherscan ↗
+          </a>
+        </>
+      </div>
+    )
+  }
+  {
+    assessment && (
+      <>
+        <p class="ty-small">
+          Assessment by {assessment.data.author}, authored {formatDate(assessment.data.assessmentDate)}
+          {assessment.data.assessmentDate > new Date().toISOString().slice(0, 10) && " (future-dated; verify the author's date)"}.
+          {version && <span> Version {version.shortSha}, committed {formatDateTime(version.date)}.</span>}
+        </p>
+        <div class="flex flex-wrap gap-3 ty-small">
+          {assessment.data.links
+            .filter((l) => l.key !== "etherscan")
+            .map((l) => (
+              <a class="underline" href={l.url} target="_blank" rel="noopener noreferrer">
+                {l.label === "Other" ? "Additional reference" : l.label} ↗
+              </a>
+            ))}
+          <a class="underline" href={assessments.fileUrl(assessment.path, version?.sha)} target="_blank" rel="noopener noreferrer">
+            Assessment source ↗
+          </a>
+        </div>
+        {versions.length > 0 && (
+          <label class="fc-field">
+            Assessment version
+            <select aria-label="Select assessment version" x-data @change="if ($el.value) window.location.href = $el.value">
+              {versions.map((v, i) => (
+                <option
+                  value={i === 0 ? `/collateral/${record.slug}` : `/collateral/${record.slug}?v=${v.sha}`}
+                  selected={v.sha === version?.sha}
+                >
+                  {formatDate(v.date)} · {v.message.slice(0, 65)}
+                  {i === 0 ? " (latest)" : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <div class="flex flex-wrap gap-3 ty-small">
+          {!isHistorical && versions.length > 1 && (
+            <a class="underline" href={`/collateral/${record.slug}/compare?from=${versions[1]!.sha}&to=${latest!.sha}`}>
+              What changed last →
+            </a>
+          )}
+          {isHistorical && version && latest && (
+            <a class="underline" href={`/collateral/${record.slug}/compare?from=${version.sha}&to=${latest.sha}`}>
+              Compare with latest →
+            </a>
+          )}
+          <a class="underline" href={`/api/collateral/${record.slug}.json`}>
+            Download structured data
+          </a>
+        </div>
+      </>
+    )
+  }
+  <p class="ty-small text-[var(--color-gray-75)]">
+    Governance reference: {
+      assessment?.data.discussionUrl ? (
+        <a class="underline" href={assessment.data.discussionUrl} target="_blank" rel="noopener noreferrer">
+          Linked discussion ↗
+        </a>
+      ) : (
+        "not linked"
+      )
+    }. A discussion link and a published assessment do not by themselves verify an adopted parameter set.
+  </p>
+</div>

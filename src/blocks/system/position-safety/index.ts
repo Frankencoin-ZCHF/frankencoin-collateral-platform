@@ -35,9 +35,9 @@ export interface PositionSafetyData {
 
 const positionSafety: SystemBlock<PositionSafetyData> = {
   id: "position-safety",
-  title: "Position safety",
+  title: "Price exposure",
   order: 25,
-  span: "half",
+  span: "full",
   enabled: (ctx) => Boolean(ctx.record.live?.safety),
   load: async (ctx) => {
     const l = ctx.record.live!;
@@ -67,7 +67,8 @@ const positionSafety: SystemBlock<PositionSafetyData> = {
       priceChf: price,
       symbol: l.symbol,
       bands: [
-        { label: "≤ 5 %", minted: band(-Infinity, 5) },
+        { label: "≤ 0%", minted: band(-Infinity, 0) },
+        { label: "0 – 5 %", minted: band(0, 5) },
         { label: "5 – 10 %", minted: band(5, 10) },
         { label: "10 – 20 %", minted: band(10, 20) },
         { label: "20 – 40 %", minted: band(20, 40) },

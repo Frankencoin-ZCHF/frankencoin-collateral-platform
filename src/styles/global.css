@@ -75,7 +75,7 @@
   .fc-pill-insufficient { @apply bg-red-100 text-red-800; }
   .fc-pill-neutral { @apply bg-[var(--color-neutral-200)] text-[var(--color-neutral-650)]; }
   .fc-pill-draft { @apply bg-amber-100 text-amber-800; }
-  .fc-pill-published { @apply bg-emerald-100 text-emerald-800; }
+  .fc-pill-published { @apply bg-blue-100 text-blue-800; }
   .fc-pill-deprecated { @apply bg-[var(--color-neutral-300)] text-[var(--color-neutral-650)]; }
   .fc-pill-live { @apply bg-blue-100 text-blue-800; }
   .fc-pill-brand { @apply bg-[var(--color-brand-deep-blue)] text-white; }
@@ -122,4 +122,53 @@
   .chip[aria-pressed="true"] {
     @apply bg-[var(--color-brand-deep-blue)] text-white border-[var(--color-brand-deep-blue)];
   }
+}
+
+@layer components {
+  .fc-cell-note { @apply block mt-1 text-[var(--color-gray-75)] font-normal whitespace-normal; font-size: 12px; line-height: 1.45; }
+  .fc-finding { @apply underline decoration-dotted; font-size: 13px; line-height: 1.4; }
+  .fc-notice { @apply rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-amber-950; font-size: 14px; line-height: 1.5; }
+  .fc-monitoring-strip { @apply rounded-lg bg-white border border-[var(--color-gray-20)] px-4 py-3 flex flex-col gap-2 text-[var(--color-neutral-650)]; font-size: 14px; line-height: 1.5; }
+  .fc-view-tabs { @apply flex flex-wrap gap-2; }
+  .fc-view-tabs a { @apply rounded-full px-4 py-2 text-[var(--color-brand-deep-blue)] border border-[var(--color-gray-20)] bg-white hover:bg-[var(--color-gray-10)]; font-size: 14px; }
+  .fc-view-tabs a[aria-current="page"] { @apply bg-[var(--color-brand-deep-blue)] text-white; }
+  .fc-field { @apply flex flex-col gap-1 text-[var(--color-neutral-650)] min-w-0; font-size: 13px; }
+  .fc-field input, .fc-field select, .fc-input { @apply border border-[var(--color-gray-30)] rounded-lg px-3 py-2 bg-white min-w-0 max-w-full; font-size: 16px; }
+  #overview-search { width: min(100%, 360px); min-width: 260px; }
+  .fc-exposure-bar { @apply flex w-full overflow-hidden rounded h-3; }
+  .fc-exposure-segment { @apply block h-full; }
+  .fc-exposure-dot { @apply inline-block w-2 h-2 rounded-full shrink-0; }
+  .fc-series-0 { background: var(--color-brand-deep-blue); }
+  .fc-series-1 { background: var(--color-brand-swiss); }
+  .fc-series-2 { background: #557da8; }
+  .fc-series-3 { background: #9b7a38; }
+  .fc-series-4 { background: #557969; }
+  .fc-series-5 { background: #8b718e; }
+  .fc-exposure-groups { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2 mt-3; }
+  .fc-exposure-groups summary { @apply flex items-center gap-2 cursor-pointer; font-size: 14px; }
+  .fc-exposure-groups summary strong { @apply ml-auto tabular-nums; }
+  .fc-exposure-groups ul { @apply mt-2 ml-4 flex flex-col gap-1; font-size: 13px; }
+  .fc-exposure-groups li { @apply flex justify-between gap-2; }
+  .fc-summary-prose { max-width: 75ch; }
+  .fc-scenario { @apply border-t border-[var(--color-gray-20)] pt-5; }
+  .fc-collateral-table { table-layout: fixed; }
+  .fc-collateral-table th { white-space: normal; line-height: 1.4; }
+  .fc-collateral-table th:first-child { width: 23%; }
+  .fc-collateral-table td { @apply py-4; overflow-wrap: anywhere; }
+  .fc-collateral-table tr[hidden], [hidden] { display: none !important; }
+  :where(button, a, input, select, summary):focus-visible { outline: 2px solid var(--color-brand-swiss); outline-offset: 3px; }
+  @media (max-width: 1000px) {
+    .fc-collateral-table, .fc-collateral-table tbody { display: block; }
+    .fc-collateral-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+    .fc-collateral-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); border-bottom: 1px solid var(--color-gray-20); padding: 12px 4px; }
+    .fc-collateral-table td { display: block; text-align: left; border: 0; padding: 8px 12px; white-space: normal; }
+    .fc-collateral-table td:first-child { grid-column: 1 / -1; }
+    .fc-collateral-table td::before { content: attr(data-label); display: block; margin-bottom: 4px; font-size: 12px; color: var(--color-gray-75); }
+  }
+  @media (max-width: 380px) {
+    #overview-search { min-width: 0; width: 100%; }
+    .fc-field { width: 100%; }
+  }
+  @media (pointer: coarse) { .chip, .fc-view-tabs a, summary { min-height: 44px; } }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 }
