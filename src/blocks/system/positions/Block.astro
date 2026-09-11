@@ -17,7 +17,7 @@ const { data } = Astro.props as Props;
         <th class="fc-num">Minted ZCHF</th>
         <th class="fc-num">Coll. ratio</th>
         <th class="fc-num">Liq. price</th>
-        <th class="fc-num">Premium</th>
+        <th class="fc-num">Effective interest</th>
         <th class="fc-num">Reserve</th>
         <th class="fc-num">Auction</th>
         <th>Expires</th>
@@ -39,5 +39,5 @@ const { data } = Astro.props as Props;
   )
 }
 <p class="ty-2xs text-[var(--color-gray-60)] mt-3">
-  Collateral ratio = collateral value at the current price ÷ minted. Open a position on <a href="https://app.frankencoin.com/monitoring" target="_blank" rel="noopener noreferrer" class="underline">app.frankencoin.com ↗</a>.
+  Effective interest includes the reserve adjustment. Collateral ratio = collateral value at the current price ÷ minted. Open a position on <a href="https://app.frankencoin.com/monitoring" target="_blank" rel="noopener noreferrer" class="underline">app.frankencoin.com ↗</a>.
 </p>

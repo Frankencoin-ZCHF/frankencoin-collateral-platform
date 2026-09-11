@@ -3,103 +3,88 @@ import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
 import AttentionList from "@/components/AttentionList.astro";
 import * as collaterals from "@/services/collaterals";
-import { attentionGroups, summarizeAttention, type Queue } from "@/services/attention";
-import { monitoringCoverage } from "@/services/monitoring";
+import { attentionGroups } from "@/services/attention";
+import { exposureGroups, monitoringCoverage, hasCurrentExposure } from "@/services/monitoring";
+import { assessmentPriorities, commonExposures, maturityProfile } from "@/services/insights";
 import { describeForLog } from "@/lib/errors";
-import { formatCompact, formatDateTime, formatPercent } from "@/lib/numbers";
+import { formatCompact, formatDate, formatDateTime, formatPercent, shortAddress } from "@/lib/numbers";
 import { config } from "@/config";
 export const prerender = false;
 let set: Awaited<ReturnType<typeof collaterals.all>> | null = null;
-try {
-  set = await collaterals.all();
-} catch (e) {
-  console.error(`[attention] ${describeForLog(e)}`);
-}
+try { set = await collaterals.all(); } catch (e) { console.error(`[attention] ${describeForLog(e)}`); }
 const records = set?.records ?? [];
-const att = summarizeAttention(records, set?.unattributedActiveChallenges ?? 0);
-const coverage = monitoringCoverage(records);
-const queues: { id: Queue; title: string; description: string; count: number }[] = [
-  {
-    id: "live",
-    title: "Financial monitoring",
-    description:
-      "Active challenges, observed price proximity and stablecoin peg changes. Findings using outdated prices describe the last observation; check the data-quality section before interpreting them.",
-    count: att.live.items,
-  },
-  {
-    id: "data",
-    title: "Data quality",
-    description:
-      "Outdated or unverified prices, incomplete position data and unavailable sources. These limit what monitoring can tell you; they do not establish a financial loss.",
-    count: att.data.items,
-  },
-  {
-    id: "review",
-    title: "Assessment findings",
-    description:
-      "Missing assessments, differences from proposed parameters and governance references to review. A published assessment alone does not establish an adopted governance baseline.",
-    count: att.review.items,
-  },
-];
+const coverage = monitoringCoverage(records), groups = exposureGroups(records);
+const shared = commonExposures(records), maturity = maturityProfile(records), review = assessmentPriorities(records);
+const exposed = records.filter(hasCurrentExposure).sort((a, b) => b.live!.totalMintedZchf - a.live!.totalMintedZchf);
+const largest = exposed[0];
+const missingDebt = exposed.filter(r => !r.assessment || r.assessmentUnavailable).reduce((s, r) => s + r.live!.totalMintedZchf, 0);
 Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 ---
-
-<Base title="Monitoring & review">
-  <Section variant="accent" pad="xs" width="wide"
-    ><a href="/" class="ty-small underline">All assets</a><h1 class="ty-large-title mt-3">Monitoring & review</h1><p
-      class="ty-body-2 mt-3 max-w-3xl"
-    >
-      Understand the financial observations, the reliability of their data, and the assessments that need further review.
-    </p>{
-      config.protocolFixturesDir && (
-        <p class="fc-notice mt-4">Sample protocol snapshot. These figures are not the current protocol state.</p>
-      )
-    }{!set?.protocolFetchedAt && <p class="fc-notice mt-4">Protocol data could not be loaded. Financial monitoring is unavailable.</p>}<div
-      class="fc-monitoring-strip mt-4"
-    >
-      <p>
-        <strong>{formatPercent(coverage.sharePct, 1)} monitoring coverage</strong> by reported outstanding ZCHF. {
-          coverage.monitoredDebt > 0
-            ? `${formatCompact(coverage.freshNearDebt)} ZCHF lies within 10% of a liquidation price in the covered data.`
-            : "No exposure has complete price-based monitoring in this snapshot."
-        }
-      </p><p>
-        Protocol data fetched {formatDateTime(set?.protocolFetchedAt)}. <button
-          x-data
-          type="button"
-          @click="window.location.reload()"
-          class="underline">Refresh data</button>
-      </p>
-    </div></Section
-  >
-  <Section pad="xs" width="wide"
-    ><nav class="fc-view-tabs mb-6" aria-label="Finding categories">{queues.map((q) => <a href={`#${q.id}`}>{q.title}</a>)}</nav><div
-      class="flex flex-col gap-6"
-    >
-      {
-        queues.map((q) => (
-          <section id={q.id} class="fc-card p-5 scroll-mt-24" aria-labelledby={`${q.id}-title`}>
-            <div class="flex flex-wrap gap-3 items-baseline justify-between">
-              <h2 id={`${q.id}-title`} class="ty-title-2 font-bold">{q.title}</h2>
-              <span class="ty-small text-[var(--color-gray-75)]">{q.count} findings</span>
-            </div>
-            <p class="ty-small text-[var(--color-gray-75)] mt-2 mb-4">{q.description}</p>
-            {q.id === "live" && (set?.unattributedActiveChallenges ?? 0) > 0 && (
-              <p class="fc-notice mb-4">
-                {set!.unattributedActiveChallenges} active challenges cannot be assigned to an asset because their positions are missing
-                from the feed. They are included in the total.{" "}
-                <a class="underline" href="https://app.frankencoin.com/challenges">
-                  Inspect challenges ↗
-                </a>
-              </p>
-            )}
-            <AttentionList groups={attentionGroups(records, q.id)} queue={q.id} expanded={q.id === "live"} />
-          </section>
-        ))
-      }
-    </div></Section
-  >
+<Base title="Portfolio insights">
+  <Section pad="xs" width="wide">
+    <div class="flex flex-wrap items-end justify-between gap-4">
+      <div><h1 class="ty-title-1">Portfolio insights</h1><p class="ty-body-2 mt-2">Where exposure is concentrated, when debt expires, and which assessments to review first.</p></div>
+      <a href="https://app.frankencoin.com/monitoring" target="_blank" rel="noopener noreferrer" class="chip">Monitor positions in the app ↗</a>
+    </div>
+    {config.protocolFixturesDir && <p class="fc-notice mt-4">Sample protocol snapshot. These figures are not the current protocol state.</p>}
+    {!set?.protocolFetchedAt && <p class="fc-notice mt-4">Protocol data is unavailable. Portfolio totals cannot be evaluated.</p>}
+    <nav class="fc-view-tabs mt-5" aria-label="Portfolio sections"><a href="#concentration">Concentration</a><a href="#maturity">Debt expiries</a><a href="#review">Assessment review</a></nav>
+  </Section>
+  <Section pad="xxs" width="wide">
+    <div class="flex flex-col gap-6">
+      <section id="concentration" class="fc-card p-5 scroll-mt-24" aria-labelledby="concentration-title">
+        <h2 id="concentration-title" class="ty-title-2 font-bold">Concentration across assets</h2>
+        <div class="fc-kv !grid-cols-1 md:!grid-cols-3 my-5">
+          <div><p class="fc-kv-label">Largest asset</p><p class="fc-kv-value">{largest?.ticker ?? "—"} <span class="ty-title-3">{formatPercent(largest && coverage.totalDebt ? largest.live!.totalMintedZchf / coverage.totalDebt * 100 : null, 1)}</span></p>{largest && <a class="ty-small underline" href={`/collateral/${largest.slug}`}>{formatCompact(largest.live!.totalMintedZchf)} ZCHF · view assessment →</a>}</div>
+          <div><p class="fc-kv-label">Largest category</p><p class="fc-kv-value">{formatPercent(groups[0]?.sharePct ?? null, 1)}</p><p class="fc-kv-unit">{groups[0]?.label ?? "Unavailable"}</p></div>
+          <div><p class="fc-kv-label">Debt without an available assessment</p><p class="fc-kv-value">{set?.protocolFetchedAt ? formatCompact(missingDebt) : "—"} <span class="ty-small">ZCHF</span></p><a class="ty-small underline" href="#review">Review coverage →</a></div>
+        </div>
+        {shared.length > 0 && <div class="border-t border-[var(--color-gray-20)] pt-4">
+          <h3 class="ty-title-3 font-bold">Shared price exposure</h3>
+          <p class="ty-small text-[var(--color-gray-75)] mt-1 mb-3">Different tokens can depend on the same underlying market. Their custody and redemption risks remain distinct.</p>
+          <ul class="fc-common-exposures">{shared.map(g => <li>
+            <div><strong>{g.label}</strong><p class="fc-cell-note">{g.assets.map((a, i) => <>{i > 0 && " · "}<a class="underline" href={`/collateral/${a.slug}`}>{a.ticker}</a></>)}</p></div>
+            <div class="fc-num"><strong>{formatCompact(g.debt)} ZCHF</strong><span class="fc-cell-note">{formatPercent(coverage.totalDebt ? g.debt / coverage.totalDebt * 100 : null, 1)} of total exposure</span></div>
+          </li>)}</ul>
+        </div>}
+        <a href="/#collaterals" class="ty-small underline mt-4 inline-block">Compare all asset categories →</a>
+      </section>
+      <section id="maturity" class="fc-card p-5 scroll-mt-24" aria-labelledby="maturity-title">
+        <h2 id="maturity-title" class="ty-title-2 font-bold">When does position debt expire?</h2>
+        <p class="ty-small text-[var(--color-gray-75)] mt-2 mb-4">Outstanding position debt, grouped by repayment deadline. Expand a period to find the positions to review.</p>
+        {maturity.reportedDebt === 0 ? <p class="ty-small">No outstanding collateralised debt is available in this snapshot.</p> : <div class="fc-maturity-list">
+          {maturity.buckets.map(b => <details class="fc-maturity-bucket" open={b.id === "expired" && b.positions.length > 0}>
+            <summary><strong>{b.label}</strong><span>{b.positions.length} position{b.positions.length === 1 ? "" : "s"}</span><strong>{formatCompact(b.debt)} ZCHF</strong></summary>
+            {b.positions.length === 0 ? <p class="ty-small p-3">No reported positions in this period.</p> : <ul class="fc-maturity-positions">{b.positions.map(p => <li>
+              <div><a class="font-bold underline" href={`/collateral/${p.slug}#position-monitoring`}>{p.ticker}</a><span class="fc-cell-note">{formatDate(p.position.expiresAt)}</span></div>
+              <span>{formatCompact(p.position.minted)} ZCHF</span>
+              <a class="underline" href={p.position.url} target="_blank" rel="noopener noreferrer" aria-label={`Inspect ${p.ticker} position ${shortAddress(p.position.address)}`}>{shortAddress(p.position.address)} ↗</a>
+            </li>)}</ul>}
+          </details>)}
+        </div>}
+        <p class="ty-small text-[var(--color-gray-75)] mt-3">{formatCompact(maturity.coveredDebt)} ZCHF in the position feed / {formatCompact(maturity.reportedDebt)} reported collateralised debt.{maturity.incompleteAssets > 0 && ` ${maturity.incompleteAssets} asset feeds are incomplete.`} Bridge minting horizons are excluded: they do not end redemption.</p>
+      </section>
+      <section id="review" class="fc-card p-5 scroll-mt-24" aria-labelledby="review-title">
+        <h2 id="review-title" class="ty-title-2 font-bold">Assessment review, ordered by exposure</h2>
+        <p class="ty-small text-[var(--color-gray-75)] mt-2 mb-4">Start with the assets representing the most outstanding ZCHF. Differences are against the author’s assessment or proposal, not a governance verdict.</p>
+        {review.length === 0 ? <p class="ty-small">No review priorities could be identified from the available assessments and protocol data.</p> : <div class="overflow-x-auto"><table class="fc-table fc-review-table">
+          <thead><tr><th>Asset</th><th class="fc-num">ZCHF exposure</th><th>Next review</th></tr></thead>
+          <tbody>{review.map(r => <tr><td><a class="font-bold underline" href={`/collateral/${r.slug}`}>{r.ticker}</a><span class="fc-cell-note">{r.category}</span></td><td class="fc-num">{formatCompact(r.debt)}</td><td><a class="font-bold underline" href={r.url}>{r.action} →</a><span class="fc-cell-note">{r.detail}</span></td></tr>)}</tbody>
+        </table></div>}
+        <details class="mt-4"><summary class="ty-small font-bold cursor-pointer">All assessment findings, including proposals</summary><div class="mt-3"><AttentionList groups={attentionGroups(records, "review")} queue="review" /></div></details>
+      </section>
+      <details id="data" class="fc-card p-5 scroll-mt-24">
+        <summary class="ty-title-3 font-bold cursor-pointer">Data coverage & sources</summary>
+        <p class="ty-small my-4">Protocol snapshot {formatDateTime(set?.protocolFetchedAt)}. Current, reconciled price data covers {formatPercent(coverage.sharePct, 1)} of reported debt. Expiry and assessment figures do not depend on market prices.</p>
+        <AttentionList groups={attentionGroups(records, "data")} queue="data" />
+      </details>
+      <details id="live" class="fc-card p-5 scroll-mt-24">
+        <summary class="ty-title-3 font-bold cursor-pointer">Position monitoring reference</summary>
+        <p class="ty-small my-4">For live position management and auctions, <a href="https://app.frankencoin.com/monitoring" class="underline" target="_blank" rel="noopener noreferrer">open the Frankencoin app ↗</a>. Price findings below use the last observed reference price.</p>
+        {(set?.unattributedActiveChallenges ?? 0) > 0 && <p class="fc-notice mb-4">{set!.unattributedActiveChallenges} active challenges have no matching position in the feed. <a href="https://app.frankencoin.com/challenges" class="underline">Inspect challenges ↗</a></p>}
+        <AttentionList groups={attentionGroups(records, "live")} queue="live" />
+      </details>
+    </div>
+  </Section>
 </Base>
-<script>
-  import "@/scripts/detail-navigation";
-</script>
+<script>import "@/scripts/detail-navigation";</script>

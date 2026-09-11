@@ -120,11 +120,11 @@ export interface Position {
   availableForClones: number;
   limitForClones: number;
   liquidationPriceZchf: number;
-  /** Risk premium above the lead rate (V2 riskPremiumPPM). V1 has no split — equals annualInterestPct. */
-  riskPremiumPct: number;
-  /** Total annual borrowing rate (annualInterestPPM on both versions). */
-  annualInterestPct: number;
-  reserveContributionPct: number;
+  /** Risk premium above the lead rate (V2 riskPremiumPPM). V1 has no separate premium and is null. */
+  riskPremiumPct: number | null;
+  /** Annual fee rate on gross debt (before the retained-reserve adjustment) (annualInterestPPM on both versions). */
+  annualInterestPct: number | null;
+  reserveContributionPct: number | null;
   challengePeriodSeconds: number;
   minimumCollateral: number;
   createdAt: string | null;

@@ -1,5 +1,6 @@
 /** Assessment comparisons describe observed settings; publication is not governance approval. */
 import { formatCompact, formatDate, formatDuration, formatNumber, formatPercent, formatPrice } from "@/lib/numbers";
+import { effectiveInterestPct } from "./lending";
 import type { AssessmentData, AssessmentStatus, LiveCollateral, Position } from "@/types";
 
 export type Verdict = "matches" | "within-tolerance" | "within-range" | "varies" | "differs" | "not-comparable" | "unavailable";
@@ -52,7 +53,7 @@ function numeric(
     assessed === null
       ? []
       : samples
-          .filter((s) => s.position && !exact(s.value, assessed))
+          .filter((s) => s.position && Number.isFinite(s.value) && !exact(s.value, assessed))
           .map((s) => ({ address: s.position!.address, url: s.position!.url, value: fmt(s.value), debt: s.position!.minted }));
   const differentDebt = differentPositions.reduce((n, p) => n + p.debt, 0);
   const base = {
@@ -65,6 +66,7 @@ function numeric(
     differentDebt,
     positionCount: samples.filter((s) => s.position).length,
   };
+  if (values.length !== samples.length) return { ...base, verdict: "unavailable", explanation: "One or more positions are missing this setting. The available values cannot establish agreement." };
   if (!values.length) return { ...base, verdict: "unavailable", explanation: "No comparable on-chain settings are available." };
   if (assessed === null) return { ...base, verdict: "not-comparable", explanation: "The assessment does not set this parameter." };
   if (values.every((v) => exact(v, assessed)))
@@ -100,7 +102,7 @@ function numeric(
 
 export function compareParameters(p: AssessmentData["params"], l: LiveCollateral | null, status: AssessmentStatus = "draft"): ParamRow[] {
   const active = l?.bridge ? [] : (l?.positions.list.filter((x) => x.status === "active") ?? []);
-  const samples = (pick: (p: Position) => number, positions = active) => positions.map((position) => ({ position, value: pick(position) }));
+  const samples = (pick: (p: Position) => number | null, positions = active): Sample[] => positions.map((position) => ({ position, value: pick(position) ?? NaN }));
   const rows = [
     numeric(
       status,
@@ -116,13 +118,10 @@ export function compareParameters(p: AssessmentData["params"], l: LiveCollateral
     numeric(
       status,
       "risk_premium",
-      "Risk premium",
-      "Interest above the lead rate; V1 positions do not expose a separate premium",
+      "Effective annual interest",
+      "Annual fee on gross debt ÷ (1 − retained reserve); comparable to the assessment’s effective interest target",
       p.targetInterestRatePct,
-      samples(
-        (p) => p.riskPremiumPct,
-        active.filter((p) => p.version === 2),
-      ),
+      samples(effectiveInterestPct),
       (n) => formatPercent(n, 2),
       15,
       "higher",

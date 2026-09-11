@@ -61,9 +61,9 @@ function mapPosition(p: api.ApiPosition, decimals: number, priceChf: number | nu
     availableForClones: fromWei(p.availableForClones),
     limitForClones: fromWei(p.limitForClones),
     liquidationPriceZchf: fromWei(p.price, 36 - decimals),
-    riskPremiumPct: ppmToPercent(p.riskPremiumPPM ?? p.annualInterestPPM ?? 0),
-    annualInterestPct: ppmToPercent(p.annualInterestPPM ?? p.riskPremiumPPM ?? 0),
-    reserveContributionPct: ppmToPercent(p.reserveContribution),
+    riskPremiumPct: p.version === 2 && p.riskPremiumPPM != null ? ppmToPercent(p.riskPremiumPPM) : null,
+    annualInterestPct: p.annualInterestPPM != null ? ppmToPercent(p.annualInterestPPM) : null,
+    reserveContributionPct: p.reserveContribution != null ? ppmToPercent(p.reserveContribution) : null,
     challengePeriodSeconds: Number(p.challengePeriod ?? 0),
     minimumCollateral: fromWei(p.minimumCollateral, decimals),
     createdAt: isoFromUnix(p.created),
@@ -100,11 +100,12 @@ function mapChallenge(c: api.ApiChallenge, decimals: number, now: number): Chall
 }
 
 /** min/max plus a minted-weighted average (plain mean when nothing is minted yet). */
-function stats(positions: Position[], pick: (p: Position) => number): { min: number; max: number; weightedAvg: number } | null {
-  if (positions.length === 0) return null;
+function stats(positions: Position[], pick: (p: Position) => number | null): { min: number; max: number; weightedAvg: number } | null {
+  if (positions.length === 0 || positions.some((p) => pick(p) === null || !Number.isFinite(pick(p)))) return null;
+  const value = (p: Position) => pick(p)!;
   const withMint = positions.filter((p) => p.minted > 0);
-  const avg = withMint.length ? weightedAverage(withMint.map((p) => [pick(p), p.minted])) : sum(positions.map(pick)) / positions.length;
-  return { ...range(positions.map(pick))!, weightedAvg: round(avg ?? 0, 3) };
+  const avg = withMint.length ? weightedAverage(withMint.map((p) => [value(p), p.minted])) : sum(positions.map(value)) / positions.length;
+  return { ...range(positions.map(value))!, weightedAvg: round(avg ?? 0, 3) };
 }
 
 function range(values: number[]): { min: number; max: number } | null {

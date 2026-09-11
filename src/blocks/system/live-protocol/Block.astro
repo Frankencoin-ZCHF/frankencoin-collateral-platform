@@ -48,14 +48,14 @@ const total = l.counts?.total ?? l.positions.total;
     <p class="fc-kv-unit">debt ÷ reference-priced collateral</p>
   </div>
   <div>
-    <p class="fc-kv-label">Live position-weighted premium</p>
+    <p class="fc-kv-label">Contract risk premium (V2)</p>
     <p class="fc-kv-value">{formatPercent(l.riskPremiumPct?.weightedAvg ?? null)}</p>
     <p class="fc-kv-unit">{l.riskPremiumPct && l.riskPremiumPct.min !== l.riskPremiumPct.max ? `positions range ${formatPercent(l.riskPremiumPct.min)} – ${formatPercent(l.riskPremiumPct.max)}` : "risk premium above the lead rate"}</p>
   </div>
   <div>
-    <p class="fc-kv-label">Total borrowing rate</p>
+    <p class="fc-kv-label">Annual fee rate on gross debt</p>
     <p class="fc-kv-value">{formatPercent(l.annualInterestPct?.weightedAvg ?? null)}</p>
-    <p class="fc-kv-unit">= lead rate + position premium</p>
+    <p class="fc-kv-unit">= base rate + contract premium, before reserve adjustment</p>
   </div>
   <div>
     <p class="fc-kv-label">Challenges</p>

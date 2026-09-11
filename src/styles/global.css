@@ -172,3 +172,51 @@
   @media (pointer: coarse) { .chip, .fc-view-tabs a, summary { min-height: 44px; } }
   @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 }
+
+/* Category-first overview and compact, comparable lending terms. */
+.fc-category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr)); gap: 10px; }
+.fc-category-card { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding: 14px 16px; border: 1px solid var(--color-gray-20); border-radius: 10px; font-size: 14px; background: white; }
+.fc-category-card > .fc-cell-note { grid-column: 1 / -1; margin: 0; }
+.fc-category-card:hover, .fc-category-card[aria-current] { border-color: var(--color-brand-deep-blue); background: var(--color-neutral-50, #f6f8fb); }
+.fc-asset-link { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; color: var(--color-brand-deep-blue); }
+.fc-asset-link > strong { font-size: 18px; }
+.fc-asset-link > span { font-size: 13px; }
+.fc-asset-link .fc-asset-cta { text-decoration: underline; text-underline-offset: 3px; margin-top: 3px; font-weight: 600; }
+.fc-collateral-table td { vertical-align: top; }
+.fc-collateral-table th:first-child { width: 22%; }
+.fc-debt-split { display: flex; flex-direction: column; border-top: 1px solid var(--color-gray-20); padding-top: 6px; margin-top: 8px; }
+.fc-metric-guide { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; font-size: 14px; }
+.fc-metric-guide dt { font-weight: 700; margin-bottom: 4px; }
+.fc-metric-guide dd { color: var(--color-gray-75); line-height: 1.6; }
+.fc-terms-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; border: 1px solid var(--color-gray-20); border-radius: 10px; overflow: hidden; }
+.fc-terms-grid > div { padding: 18px; border-right: 1px solid var(--color-gray-20); }
+.fc-terms-grid > div:last-child { border-right: 0; }
+.fc-terms-grid .fc-kv-value { font-size: 24px; }
+.fc-assessed-term { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-gray-20); font-size: 14px; }
+@media (max-width: 700px) {
+  .fc-metric-guide, .fc-terms-grid { grid-template-columns: 1fr; }
+  .fc-terms-grid > div { border-right: 0; border-bottom: 1px solid var(--color-gray-20); }
+  .fc-terms-grid > div:last-child { border-bottom: 0; }
+}
+.fc-common-exposures { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.fc-common-exposures li { display: flex; justify-content: space-between; gap: 14px; padding: 14px; border-radius: 8px; background: #f6f8fb; font-size: 14px; }
+.fc-maturity-bucket { border-bottom: 1px solid var(--color-gray-20); }
+.fc-maturity-bucket summary { display: grid; grid-template-columns: minmax(130px, 1fr) auto auto; gap: 16px; padding: 14px 8px; cursor: pointer; font-size: 14px; }
+.fc-maturity-bucket summary strong:first-child::before { content: '›'; display: inline-block; width: 16px; }
+.fc-maturity-bucket[open] summary strong:first-child::before { content: '⌄'; }
+.fc-maturity-bucket summary > :last-child { min-width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+.fc-maturity-positions { max-height: 340px; overflow: auto; padding: 4px 12px; background: #f6f8fb; }
+.fc-maturity-positions li { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; padding: 10px 4px; font-size: 14px; border-bottom: 1px solid var(--color-gray-20); }
+.fc-review-table td { vertical-align: top; }
+.fc-review-table td:last-child { min-width: 230px; }
+@media (max-width: 550px) {
+  .fc-maturity-bucket summary { grid-template-columns: 1fr auto; gap: 6px; }
+  .fc-maturity-bucket summary > span { grid-row: 2; padding-left: 16px; }
+  .fc-maturity-bucket summary > :last-child { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+  .fc-maturity-positions li { grid-template-columns: 1fr auto; }
+  .fc-maturity-positions li > a { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .fc-category-grid { display: flex; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
+  .fc-category-card { flex: 0 0 225px; scroll-snap-align: start; }
+}

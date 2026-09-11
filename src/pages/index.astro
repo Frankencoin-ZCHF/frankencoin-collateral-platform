@@ -1,14 +1,12 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
-import StatsContainer from "@/components/StatsContainer/StatsContainer.astro";
 import CollateralTable from "@/components/CollateralTable.astro";
-import Button from "@/components/Button/Button.astro";
 import * as collaterals from "@/services/collaterals";
 import { summarizeAttention } from "@/services/attention";
 import { exposureGroups, monitoringCoverage } from "@/services/monitoring";
 import { toRow } from "@/lib/rows";
-import { collateralView, matchesFilters } from "@/lib/collateral-filters";
+import { collateralView, matchesFilters, collateralSort, sortRows } from "@/lib/collateral-filters";
 import { jsonForScript } from "@/lib/html";
 import { formatCompact, formatDateTime, formatPercent } from "@/lib/numbers";
 import { describeForLog } from "@/lib/errors";
@@ -24,36 +22,23 @@ const records = set?.records ?? [];
 const summary = collaterals.summarize(records);
 const coverage = monitoringCoverage(records);
 const att = summarizeAttention(records, set?.unattributedActiveChallenges ?? 0);
-const rows = records.map((r) => toRow(r, summary.totalMintedZchf));
+const sort = collateralSort(Astro.url.searchParams.get("sort"));
+const rows = sortRows(records.map((r) => toRow(r, summary.totalMintedZchf)), sort);
 const groups = exposureGroups(records);
 const view = collateralView(Astro.url.searchParams.get("view"));
 const query = Astro.url.searchParams.get("q") ?? "";
 const groupOptions = [...new Set(rows.map((r) => r.exposureGroup))].sort();
 const requestedGroup = Astro.url.searchParams.get("group");
 const group = requestedGroup && groupOptions.includes(requestedGroup) ? requestedGroup : "all";
+const viewHref = (value: string) => {
+  const params = new URLSearchParams({ view: value });
+  if (query) params.set("q", query);
+  if (group !== "all") params.set("group", group);
+  if (sort !== "exposure") params.set("sort", sort);
+  return `?${params}#collaterals`;
+};
 const visibleCount = rows.filter((r) => matchesFilters(r, view, query, group)).length;
 const protocolAvailable = Boolean(set?.protocolFetchedAt);
-const challengeAvailable = protocolAvailable && !set?.protocolDegraded.some((s) => s === "all" || /challenge/i.test(s));
-const kpis = [
-  {
-    label: "Outstanding ZCHF exposure",
-    value: protocolAvailable ? formatCompact(summary.totalMintedZchf) : "–",
-    unit: "ZCHF",
-    sub: `${formatCompact(summary.bridgeMintedZchf)} through 1:1 bridges · the remainder through collateralised borrowing`,
-  },
-  {
-    label: "Estimated backing value",
-    value: protocolAvailable ? formatCompact(coverage.backingValueChf) : "–",
-    unit: "CHF",
-    sub: `${coverage.valuedAssets} of ${coverage.exposedAssets} assets valued · check source freshness below`,
-  },
-  {
-    label: "Active challenges",
-    value: challengeAvailable ? String(att.live.challenges) : "–",
-    sub: challengeAvailable ? "Observed in the current snapshot · view financial monitoring →" : "Challenge monitoring unavailable",
-    href: "/attention#live",
-  },
-];
 const views = [
   ["current", "Current backing"],
   ["proposals", "Proposals & unused"],
@@ -64,166 +49,60 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 ---
 
 <Base>
-  <Section variant="accent" pad="xs" width="wide" id="top">
-    <div class="flex flex-col gap-5">
-      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4">
-        <div class="max-w-3xl">
-          <p class="ty-subtitle">FRANKENCOIN · COLLATERAL PLATFORM</p><h1 class="ty-large-title">What backs Frankencoin?</h1><p
-            class="ty-body-2 mt-2 text-[var(--color-neutral-650)]"
-          >
-            Explore the assets backing ZCHF, the exposure to each asset, and the findings in their risk assessments.
-          </p>
-        </div>
-        <Button href="/attention" variant="secondary" size="sm">Monitoring & review</Button>
-      </div>
-      {
-        config.protocolFixturesDir && (
-          <p class="fc-notice">
-            Sample protocol snapshot. These figures are provided for demonstration and are not the current protocol state.
-          </p>
-        )
-      }
-      {
-        !protocolAvailable && (
-          <p class="fc-notice" role="status">
-            Protocol data could not be loaded. Exposure and monitoring figures are unavailable.
-          </p>
-        )
-      }
-      <StatsContainer options={kpis} cols={3} />
-      <p class="ty-small text-[var(--color-neutral-650)]">
-        Exposure means outstanding issuance through the facilities shown here. It is not circulating ZCHF supply. Estimated backing is the
-        reported collateral and bridge-token value; this page is not a complete protocol balance sheet.
-      </p>
-      <div class="fc-monitoring-strip">
-        <p>
-          {
-            coverage.incompleteAssets > 0 || set?.protocolDegraded.length ? (
-              <>
-                <strong>Price-based monitoring is incomplete.</strong> {formatPercent(coverage.sharePct, 1)} of reported exposure has
-                current reference prices and reconciled position data.{" "}
-                <a href="/attention#data" class="underline">
-                  Review data quality →
-                </a>
-              </>
-            ) : (
-              <>
-                <strong>Monitoring coverage:</strong> {formatPercent(coverage.sharePct, 1)} of reported exposure. No monitoring result
-                guarantees asset safety.
-              </>
-            )
-          }
-        </p>
-        <p>
-          {
-            coverage.monitoredDebt > 0
-              ? `${formatCompact(coverage.freshNearDebt)} ZCHF is within 10% of a liquidation price in the covered data.`
-              : "No exposure has complete price-based monitoring in this snapshot."
-          }
-          <a href="/attention#live" class="underline">View findings →</a>
-        </p>
-      </div>
-      <div class="flex flex-wrap gap-x-4 gap-y-2 items-center ty-small text-[var(--color-gray-75)]">
-        <span>Protocol data fetched {formatDateTime(set?.protocolFetchedAt)}</span><button
-          type="button"
-          x-data
-          @click="window.location.reload()"
-          class="underline">Refresh data</button
-        ><span>Source prices have their own observation times.</span>
-      </div>
+  <Section pad="xs" width="wide" id="top">
+    <div class="flex flex-wrap items-baseline justify-between gap-3 mb-5">
+      <h1 class="ty-title-1">Collaterals</h1>
+      <a href="/attention" class="ty-small underline">Portfolio insights →</a>
     </div>
+    {config.protocolFixturesDir && <p class="fc-notice mb-4">Sample protocol snapshot. These figures are not the current protocol state.</p>}
+    {!protocolAvailable && <p class="fc-notice mb-4" role="status">Protocol data is unavailable. You can still explore the assessments.</p>}
+    {groups.length > 0 && <section aria-labelledby="categories-title">
+      <div class="flex flex-wrap justify-between items-baseline gap-2 mb-3">
+        <h2 id="categories-title" class="ty-title-3 font-bold">Backing by asset category</h2>
+        <p class="ty-small text-[var(--color-gray-75)]">Share of outstanding ZCHF · select a category to explore</p>
+      </div>
+      <div class="fc-exposure-bar mb-3" aria-hidden="true">{groups.map((g, i) => <span class={`fc-exposure-segment fc-series-${i % 6}`} style={`width:${g.sharePct}%`} />)}</div>
+      <div class="fc-category-grid">
+        {groups.map((g, i) => <a class="fc-category-card" href={`?view=current&group=${encodeURIComponent(g.label)}#collaterals`} data-overview-category={g.label} aria-current={group === g.label ? "true" : undefined}>
+          <span class="flex items-center gap-2"><span class={`fc-exposure-dot fc-series-${i % 6}`} aria-hidden="true" />{g.label}</span>
+          <strong>{formatPercent(g.sharePct, 1)}</strong>
+          <span class="fc-cell-note">{formatCompact(g.debt)} ZCHF · {g.assets.map(a => a.ticker).join(", ")} <span aria-hidden="true">→</span></span>
+        </a>)}
+      </div>
+    </section>}
   </Section>
-  {
-    groups.length > 0 && (
-      <Section pad="xxs" width="wide">
-        <div class="fc-card p-4">
-          <>
-            <h2 class="ty-title-3 font-bold">Exposure by underlying asset</h2>
-            <p class="ty-small text-[var(--color-gray-75)] mt-1 mb-3">
-              Share of outstanding ZCHF represented here. Wrappers and issuers remain separate assets in the table.
-            </p>
-            <div class="fc-exposure-bar" aria-hidden="true">
-              {groups.map((g, i) => (
-                <span class={`fc-exposure-segment fc-series-${i % 6}`} style={`width:${g.sharePct}%`} />
-              ))}
-            </div>
-            <div class="fc-exposure-groups">
-              {groups.map((g, i) => (
-                <details>
-                  <summary>
-                    <span class={`fc-exposure-dot fc-series-${i % 6}`} aria-hidden="true" />
-                    <span>{g.label}</span>
-                    <strong>{formatPercent(g.sharePct, 1)}</strong>
-                  </summary>
-                  <ul>
-                    {g.assets.map((a) => (
-                      <li>
-                        <a href={`/collateral/${a.slug}`} class="underline">
-                          {a.ticker}
-                        </a>
-                        <span>{formatCompact(a.debt)} ZCHF</span>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              ))}
-            </div>
-          </>
-        </div>
-      </Section>
-    )
-  }
   <Section pad="xxs" width="wide" id="collaterals">
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 class="ty-title-1">Explore the assets</h2><p
-          id="overview-count"
-          class="ty-small text-[var(--color-gray-75)]"
-          role="status"
-          aria-live="polite"
-        >
-          {visibleCount} assets
-        </p>
+        <h2 class="ty-title-2 font-bold">Compare assets</h2>
+        <p id="overview-count" class="ty-small text-[var(--color-gray-75)]" role="status" aria-live="polite">{visibleCount} assets</p>
       </div>
-      <nav class="fc-view-tabs" aria-label="Asset views">
-        {
-          views.map(([value, label]) => (
-            <a href={`?view=${value}#collaterals`} data-overview-view={value} aria-current={view === value ? "page" : undefined}>
-              {label}
-            </a>
-          ))
-        }
-      </nav>
+      <nav class="fc-view-tabs" aria-label="Asset views">{views.map(([value, label]) => <a href={viewHref(value)} data-overview-view={value} aria-current={view === value ? "page" : undefined}>{label}</a>)}</nav>
       <form id="overview-form" method="get" class="flex flex-wrap gap-3 items-end">
-        <input type="hidden" name="view" value={view} /><label class="fc-field"
-          >Search assets<input
-            id="overview-search"
-            name="q"
-            type="search"
-            value={query}
-            placeholder="Name, ticker or contract address"
-          /></label
-        ><label class="fc-field"
-          >Underlying exposure<select id="overview-group" name="group"
-            ><option value="all">All groups</option>{
-              groupOptions.map((g) => (
-                <option value={g} selected={g === group}>
-                  {g}
-                </option>
-              ))
-            }</select
-          ></label
-        ><button type="submit" class="chip">Apply filters</button>
+        <input type="hidden" name="view" value={view} />
+        <label class="fc-field">Search assets<input id="overview-search" name="q" type="search" value={query} placeholder="Name, ticker or contract address" /></label>
+        <label class="fc-field">Asset category<select id="overview-group" name="group"><option value="all">All categories</option>{groupOptions.map(g => <option value={g} selected={g === group}>{g}</option>)}</select></label>
+        <label class="fc-field">Sort by<select id="overview-sort" name="sort">
+          <option value="exposure" selected={sort === "exposure"}>Largest exposure</option>
+          <option value="name" selected={sort === "name"}>Asset name</option>
+          <option value="backing" selected={sort === "backing"}>Lowest overcollateralisation</option>
+          <option value="interest" selected={sort === "interest"}>Lowest effective interest</option>
+        </select></label>
+        <button type="submit" class="chip">Apply</button><a href="?view=all#collaterals" id="overview-clear" class="ty-small underline">Clear filters</a>
       </form>
       <script is:inline type="application/json" id="grid-data" set:html={jsonForScript(rows)} />
       <CollateralTable rows={rows} view={view} query={query} group={group} />
-      <p id="overview-empty" hidden={visibleCount > 0} class="fc-notice">
-        No assets match these filters. Try another view or clear your search.
-      </p>
-      <p class="ty-small text-[var(--color-gray-75)]">
-        A price cushion is the distance from a reference market price to a configured liquidation price. Challenges and auctions determine
-        liquidation outcomes; displayed prices do not automatically liquidate positions.
-      </p>
+      <p id="overview-empty" hidden={visibleCount > 0} class="fc-notice">No assets match. <a href="?view=all#collaterals" class="underline">Show all assets</a></p>
+      <p class="ty-small text-[var(--color-gray-75)]">*Reserve split uses each position’s retained-reserve requirement. “Outside reserve” is before fees; circulating supply and currently redeemable reserves may differ.</p>
+      <details class="fc-card p-4" id="metric-guide">
+        <summary class="font-bold ty-small cursor-pointer">How to read these figures</summary>
+        <dl class="fc-metric-guide mt-4">
+          <div><dt>Average overcollateralisation</dt><dd>Total reported collateral value ÷ gross debt − 1. For 140 CHF backing and 100 ZCHF debt, this is +40%. Individual positions can have less protection; open an asset to inspect them.</dd></div>
+          <div><dt>Retained reserve</dt><dd>The share of each position’s gross debt assigned to the minter reserve. Amounts shown are reserve requirements; recoverable amounts can be lower after protocol losses.</dd></div>
+          <div><dt>Effective annual interest</dt><dd>Annual fee rate on gross debt ÷ (1 − reserve share). This includes the base rate and contract premium. Ranges span open positions. It follows the assessment framework; upfront fees and loan duration affect the borrower’s realised cost.</dd></div>
+          <div><dt>Global minting limit</dt><dd>The protocol’s aggregate limit across original facilities, including their clones once. Unused limit is not a quote for immediately available borrowing.</dd></div>
+        </dl>
+      </details>
       <details id="advanced-grid" class="fc-card p-4">
         <summary class="font-bold ty-small cursor-pointer">Advanced data & export</summary><p
           class="ty-small mt-3 mb-3 text-[var(--color-gray-75)]"
@@ -256,33 +135,21 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
       </details>
     </div>
   </Section>
-  <Section pad="xs" width="wide"
-    ><details class="fc-card p-5">
-      <summary class="ty-title-3 font-bold cursor-pointer">Assessment coverage & sources</summary><p class="ty-small mt-4">
-        Among currently live assets: {summary.coverage.published} published assessments, {summary.coverage.draft} drafts, {
-          summary.coverage.missing
-        } missing and {summary.coverage.unavailable} unavailable. Publication is independent of protocol use and does not establish governance
-        approval.
-      </p><div class="flex flex-wrap gap-4 mt-4 ty-small">
-        <a class="underline" href="/attention#review">Review assessment findings ({att.review.items})</a><a
-          class="underline"
-          href="/framework">Risk framework</a
-        ><a class="underline" href="https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals"
-          >Propose an asset ↗</a>
-      </div><p class="ty-small mt-4 text-[var(--color-gray-75)]">
-        Assessment snapshot {set?.assessmentsHead?.shortSha ?? "unavailable"}, retrieved {formatDateTime(set?.assessmentsFetchedAt)}.
-        Protocol data: api.frankencoin.com.
-      </p>{
-        set?.warnings.length ? (
-          <ul class="ty-small list-disc pl-5 mt-3">
-            {set.warnings.map((w) => (
-              <li>{w}</li>
-            ))}
-          </ul>
-        ) : null
-      }
-    </details></Section
-  >
+  <Section pad="xs" width="wide">
+    <details class="fc-card p-5" id="data-sources">
+      <summary class="ty-title-3 font-bold cursor-pointer">Data & assessment sources</summary>
+      <p class="ty-small mt-4">Protocol snapshot: {formatDateTime(set?.protocolFetchedAt)} · api.frankencoin.com. Price observation times appear on each asset page.</p>
+      <p class="ty-small mt-3">Price-based monitoring covers {formatPercent(coverage.sharePct, 1)} of reported debt. <a class="underline" href="/attention#data">Inspect source gaps →</a></p>
+      <p class="ty-small mt-3">Current assets: {summary.coverage.published} published assessments, {summary.coverage.draft} drafts, {summary.coverage.missing} missing and {summary.coverage.unavailable} unavailable. Publication does not establish governance approval.</p>
+      <div class="flex flex-wrap gap-4 mt-4 ty-small">
+        <a class="underline" href="/attention#review">Assessment review ({att.review.items} findings)</a>
+        <a class="underline" href="/framework">Risk framework</a>
+        <a class="underline" href="https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals">Propose an asset ↗</a>
+      </div>
+      <p class="ty-small mt-3">Assessment snapshot {set?.assessmentsHead?.shortSha ?? "unavailable"}, retrieved {formatDateTime(set?.assessmentsFetchedAt)}.</p>
+      {set?.warnings.length ? <ul class="ty-small list-disc pl-5 mt-3">{set.warnings.map(w => <li>{w}</li>)}</ul> : null}
+    </details>
+  </Section>
 </Base>
 <script>
   import "@/scripts/overview";

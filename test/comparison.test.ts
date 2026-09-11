@@ -73,10 +73,13 @@ describe("per-position assessment comparisons", () => {
       )!.verdict,
     ).toBe("matches");
   });
-  it("excludes V1 total interest from risk-premium comparisons", () => {
+  it("compares V1 effective interest without inventing a separate contract premium", () => {
     const old = withPositions([25]);
     old.positions.list[0]!.version = 1;
-    expect(row(old, "risk_premium").verdict).toBe("unavailable");
+    old.positions.list[0]!.annualInterestPct = 0.5625;
+    old.positions.list[0]!.riskPremiumPct = null;
+    expect(row(old, "risk_premium").verdict).toBe("matches");
+    expect(row(old, "risk_premium").onchain).toBe("0.75%");
   });
   it("does not imply publication is governance approval", () => {
     const r = compareParameters(assessment.data.params, withPositions([10]), "published")[0]!;

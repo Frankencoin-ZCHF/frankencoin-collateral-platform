@@ -74,10 +74,18 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
   verdicts distinguish exact matches, display tolerance, conservative uniform values, varied
   positions and differences. Each row lists differing position links and their outstanding debt.
 - `src/services/monitoring.ts` — reference-price quality, exposure-weighted monitoring coverage,
-  underlying-asset concentration, and static price-drop scenarios. Freshness windows are explicit
+  asset-category concentration, and static price-drop scenarios. Freshness windows are explicit
   UI monitoring settings in `src/lib/assets.ts` (1 hour for crypto/bridges, 24 for gold/unknown,
   72 for shares/ETF exposure), not guarantees of liquidity. Taxonomy uses contract identity.
   Scenario debt is static threshold exposure, never a loss forecast; assume 1 ZCHF = 1 CHF.
+- `src/services/lending.ts` — reserve-adjusted effective interest, reserve requirement / outside-reserve
+  debt split, aggregate overcollateralisation and minting-limit use. Effective interest is the whole
+  annual gross fee rate divided by `(1 - reserve fraction)`, not the raw contract premium. Effective
+  averages weight by debt outside the reserve; reserve averages weight by gross debt. Missing rates
+  remain unavailable. Reserve splits require reconciled feeds (allowing integer rounding only) and
+  describe nominal requirements before fees, not actual redeemable balances or circulating supply.
+- `src/services/insights.ts` — shared price drivers, mutually exclusive debt-expiry buckets, and
+  assessment actions ordered by outstanding exposure. Bridge minting horizons are not loan maturities.
 - `src/services/discussions.ts` — GraphQL only (needs token). Thread resolution: explicit
   `links.discussion` URL in the frontmatter → else `matchThreads()` heuristic on the
   "Acceptable Collaterals" category titles.
@@ -118,7 +126,7 @@ renders an "unavailable" card, never a 500.
 ### Client islands
 
 Basic browsing uses a six-column SSR table plus lightweight `overview.ts` filters; URL parameters
-preserve search, exposure group and view. Current backing includes any outstanding debt even if
+preserve search, asset category, sort and view. Current backing includes any outstanding debt even if
 minting has ended. AG Grid loads only when “Advanced data & export” opens (`grid-loader.ts`).
 `charts-loader.ts` imports ECharts when a detail-page `[data-chart]` scrolls into view.
 `detail-navigation.ts` opens disclosures for deep links. Alpine is bundled from npm (no CDN).
@@ -131,7 +139,8 @@ minting has ended. AG Grid loads only when “Advanced data & export” opens (`
 - **Number encodings:** token amounts are BigInt strings → `fromWei(v, decimals)`; position
   liquidation prices are scaled by `36 - decimals`; `riskPremiumPPM`/`reserveContribution` are PPM
   → `ppmToPercent`. V2 positions carry both `riskPremiumPPM` (premium) and `annualInterestPPM`
-  (total rate); V1 only has `annualInterestPPM`. The `cooldown` field can be 2^256 — `isoFromUnix`
+  (gross annual fee rate); V1 only has `annualInterestPPM` and no separate premium. Both need
+  the retained-reserve adjustment to be comparable with assessed effective interest. The `cooldown` field can be 2^256 — `isoFromUnix`
   returns null for it.
 - **Frontmatter units differ:** `market_risk`/`compensation` are `"16.98%"` strings,
   `retained_reserve`/`target_interest_rate` are fractions (`0.25`, `0.0075`) — `lib/normalize.ts`

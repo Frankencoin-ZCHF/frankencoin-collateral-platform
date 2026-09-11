@@ -1,4 +1,5 @@
 ---
+import { effectiveInterestPct } from "@/services/lending";
 import type { Position } from "@/types";
 import { formatCompact, formatDate, formatDuration, formatNumber, formatPercent, formatPrice, shortAddress } from "@/lib/numbers";
 interface Props {
@@ -17,7 +18,7 @@ const { p } = Astro.props as Props;
   <td class="fc-num">{formatCompact(p.minted)}</td>
   <td class="fc-num">{p.collateralRatioPct === null ? "–" : formatPercent(p.collateralRatioPct, 0)}</td>
   <td class="fc-num">{formatPrice(p.liquidationPriceZchf)}</td>
-  <td class="fc-num">{formatPercent(p.riskPremiumPct)}</td>
+  <td class="fc-num">{formatPercent(effectiveInterestPct(p))}</td>
   <td class="fc-num">{formatPercent(p.reserveContributionPct, 0)}</td>
   <td class="fc-num">{formatDuration(p.challengePeriodSeconds)}</td>
   <td class="whitespace-nowrap">{formatDate(p.expiresAt)}</td>
