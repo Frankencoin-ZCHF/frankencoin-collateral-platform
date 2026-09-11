@@ -39,3 +39,7 @@ Full browser visual and interaction checks remain outstanding because browser ac
 - Made the full assessment a visible section with a prominent link near the summary, a contents list on the left on desktop (above the chapters on mobile), and individually expandable chapter titles. Readers can expand or collapse all chapters; each chapter remains accessible without JavaScript.
 - Kept report chapter anchors separate from quantitative section anchors, updated internal report links, and retained legacy deep-link handling.
 - Verified with 123 unit tests, Astro checking, a production build and offline production HTML checks covering long summaries, historical assessments, chapter contents links and unassessed bridges. The browser verification limitation above still applies.
+
+## Follow-up: invite community participation
+
+The detail-page hero now includes a community widget beside the asset heading on desktop and above the executive summary on mobile. It invites questions, evidence and improvements, linking directly to the existing discussion. It reuses the discussion block's resolution without additional requests, keeps declared links usable during API failures, and labels the forum fallback separately when no thread is known. Historical assessments link to the current community discussion.
