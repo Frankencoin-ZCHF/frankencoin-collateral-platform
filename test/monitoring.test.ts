@@ -67,7 +67,7 @@ describe("source-price freshness", () => {
     expect(priceQuality(l, NOW).state).toBe("stale");
     l.address = "0x45804880de22913dafe09f4980848ece6ecbaf78";
     expect(priceQuality(l, NOW)).toMatchObject({ state: "current", maxAgeHours: 24 });
-    expect(assetProfile(WBTC.toUpperCase()).group).toBe("Bitcoin");
+    expect(assetProfile(WBTC.toUpperCase()).group).toBe("Custodied BTC");
     expect(assetProfile("0x0000000000000000000000000000000000000001").group).toBe("Other / unclassified");
   });
   it("keeps a known active challenge visible alongside a data limitation", () => {
@@ -144,7 +144,7 @@ describe("exposure browsing", () => {
     impostor.slug = "wbtc-other";
     impostor.live!.totalMintedZchf = 100;
     const groups = exposureGroups([a, b, impostor]);
-    expect(groups[0]).toMatchObject({ label: "Bitcoin", debt: 400, sharePct: 80 });
+    expect(groups[0]).toMatchObject({ label: "Custodied BTC", debt: 400, sharePct: 80 });
     expect(groups[0]!.assets.map((a) => a.slug)).toEqual(["cbbtc", "wbtc"]);
     expect(groups[1]!.label).toBe("Other / unclassified");
   });
@@ -157,10 +157,10 @@ describe("exposure browsing", () => {
   });
   it("combines search, exposure groups and view filters", () => {
     const r = toRow(record(), 1_000_000);
-    expect(matchesFilters(r, "current", " WbTc ", "Bitcoin")).toBe(true);
-    expect(matchesFilters(r, "current", WBTC, "Bitcoin")).toBe(true);
-    expect(matchesFilters(r, "current", "WBTC", "Gold")).toBe(false);
-    expect(matchesFilters(r, "archive", "WBTC", "Bitcoin")).toBe(false);
+    expect(matchesFilters(r, "current", " WbTc ", "Custodied BTC")).toBe(true);
+    expect(matchesFilters(r, "current", WBTC, "Custodied BTC")).toBe(true);
+    expect(matchesFilters(r, "current", "WBTC", "Tokenised gold")).toBe(false);
+    expect(matchesFilters(r, "archive", "WBTC", "Custodied BTC")).toBe(false);
   });
 });
 

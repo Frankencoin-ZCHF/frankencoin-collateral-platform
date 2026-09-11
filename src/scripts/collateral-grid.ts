@@ -99,7 +99,7 @@ function reviewCell(p: ICellRendererParams<CollateralRow>): HTMLElement {
     return span;
   }
   const a = document.createElement("a");
-  a.href = p.data?.attentionUrl ?? "/attention";
+  a.href = p.data ? `/attention#review-${p.data.slug}` : "/attention#review";
   a.textContent = String(n);
   a.className = "fc-pill fc-pill-neutral hover:bg-[var(--color-neutral-300)]";
   a.title = (p.data?.review ?? []).join("\n");
@@ -126,7 +126,7 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
       { field: "publicInformation", headerName: "Public info", width: 120, cellRenderer: (p: ICellRendererParams<CollateralRow>) => pill(p.value), hide: true },
       { field: "marketRiskPct", headerName: "Observed downside", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Historical downside from the assessment, measured over twice its proposed auction duration. Not a future loss ceiling.", hide: true },
       { field: "retainedReservePct", headerName: "Assessed reserve", width: 135, type: "num", valueFormatter: pct(1), headerTooltip: "Share of minted ZCHF proposed to be retained for liquidation outcomes", hide: true },
-      { field: "targetRatePct", headerName: "Assessed premium", width: 140, type: "num", valueFormatter: pct(2), headerTooltip: "Assessed target risk premium above the lead rate", hide: true },
+      { field: "targetRatePct", headerName: "Assessed effective rate", width: 140, type: "num", valueFormatter: pct(2), headerTooltip: "Assessed effective annual interest rate, after reserve adjustment", hide: true },
       { field: "totalCompensationPct", headerName: "Tail-risk comp.", width: 130, type: "num", valueFormatter: pct(2), hide: true },
       { field: "liquidationPriceAssessed", headerName: "Liq. price (assessed)", width: 150, type: "num", valueFormatter: price, hide: true },
       { field: "auctionDurationHours", headerName: "Auction (h)", width: 110, type: "num", valueFormatter: num(0), hide: true },
@@ -147,8 +147,12 @@ const columnDefs: (ColDef<CollateralRow> | ColGroupDef<CollateralRow>)[] = [
       { field: "debtWithin10Pct", headerName: "Debt ≤10% of liq.", width: 140, type: "num", valueFormatter: compact, hide: true },
       { field: "weightedCollateralRatioPct", headerName: "Collateralisation", width: 135, type: "num", valueFormatter: pct(0), hide: true },
       { field: "utilizationPct", headerName: "Debt / collateral value", width: 110, type: "num", valueFormatter: pct(1), headerTooltip: "Debt ÷ reference-priced collateral", hide: true },
-      { field: "riskPremiumAvgPct", headerName: "Live premium", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Live position-weighted risk premium", hide: true },
-      { field: "annualInterestAvgPct", headerName: "Total borrowing rate", width: 150, type: "num", valueFormatter: pct(2), headerTooltip: "Lead rate + position premium, minted-weighted", hide: true },
+      { field: "riskPremiumAvgPct", headerName: "V2 contract premium", width: 120, type: "num", valueFormatter: pct(2), headerTooltip: "Live position-weighted risk premium", hide: true },
+      { field: "effectiveInterestAvgPct", headerName: "Effective annual interest", width: 170, type: "num", valueFormatter: pct(2), headerTooltip: "Reserve-adjusted annual rate, weighted by debt outside reserve" },
+      { field: "overcollateralisationPct", headerName: "Average overcollateralisation", width: 190, type: "num", valueFormatter: pct(1), headerTooltip: "Total collateral value divided by gross debt, minus one" },
+      { field: "outsideReserveZchf", headerName: "ZCHF outside reserve", width: 170, type: "num", valueFormatter: compact, hide: true },
+      { field: "reserveRequiredZchf", headerName: "Minter reserve requirement", width: 180, type: "num", valueFormatter: compact, hide: true },
+      { field: "annualInterestAvgPct", headerName: "Gross annual fee rate", width: 150, type: "num", valueFormatter: pct(2), headerTooltip: "Base rate + contract premium, before reserve adjustment, minted-weighted", hide: true },
       { field: "reserveContributionAvgPct", headerName: "Live reserve", width: 115, type: "num", valueFormatter: pct(1), hide: true },
       { field: "remainingLimitZchf", headerName: "Remaining agg. limit", width: 150, type: "num", valueFormatter: compact, headerTooltip: "Unused aggregate limit; actual borrowing depends on position terms and collateral", hide: true },
       { field: "totalLimitZchf", headerName: "Aggregate limit", width: 130, type: "num", valueFormatter: compact, hide: true },

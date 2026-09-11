@@ -4,6 +4,7 @@
  */
 
 import type { CollateralLifecycle, CollateralRecord } from "@/types";
+import { lendingTerms, formatTerm } from "@/services/lending";
 import { assetProfile } from "./assets";
 import { priceQuality } from "@/services/monitoring";
 import { itemsFor, monitoringStatus } from "@/services/attention";
@@ -16,6 +17,15 @@ export interface CollateralRow {
   assetType: string;
   exposureGroup: string;
   sharePct: number | null;
+  overcollateralisationPct: number | null;
+  collateralisationPct: number | null;
+  reserveRequiredZchf: number | null;
+  outsideReserveZchf: number | null;
+  reserveLabel: string;
+  effectiveInterestLabel: string;
+  effectiveInterestAvgPct: number | null;
+  termsComplete: boolean;
+  limitUsedPct: number | null;
   monitoringLabel: string;
   monitoringDetail: string;
   dataQualityCount: number;
@@ -83,6 +93,7 @@ export interface CollateralRow {
 export function toRow(r: CollateralRecord, totalDebt?: number): CollateralRow {
   const a = r.assessment?.data ?? null;
   const l = r.live;
+  const terms = lendingTerms(l);
   const items = itemsFor(r);
   const monitoring = monitoringStatus(r);
   const profile = assetProfile(r.address, Boolean(l?.bridge));
@@ -95,6 +106,15 @@ export function toRow(r: CollateralRecord, totalDebt?: number): CollateralRow {
     ticker: r.ticker,
     name: r.name,
     assetType: profile.type,
+    overcollateralisationPct: terms.overcollateralisationPct,
+    collateralisationPct: terms.collateralisationPct,
+    reserveRequiredZchf: terms.reserveRequired,
+    outsideReserveZchf: terms.outsideReserve,
+    reserveLabel: l?.bridge ? "Not applicable" : formatTerm(terms.reserve, 1),
+    effectiveInterestLabel: l?.bridge ? "No borrowing interest" : formatTerm(terms.interest),
+    effectiveInterestAvgPct: terms.interest?.average ?? null,
+    termsComplete: terms.complete,
+    limitUsedPct: terms.limitUsedPct,
     exposureGroup: profile.group,
     sharePct: totalDebt && l ? l.totalMintedZchf / totalDebt * 100 : null,
     monitoringLabel: monitoring.label,

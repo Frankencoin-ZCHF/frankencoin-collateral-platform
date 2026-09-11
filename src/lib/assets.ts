@@ -1,6 +1,7 @@
 /** Display taxonomy, keyed by Ethereum contract identity, never by a token's ticker. */
 export interface AssetProfile {
   group: string;
+  underlying: string;
   type: string;
   description: string;
   priceMaxAgeHours: number;
@@ -8,7 +9,7 @@ export interface AssetProfile {
 
 const profiles: Record<string, AssetProfile> = {};
 function add(address: string, group: string, type: string, description: string, priceMaxAgeHours = 1) {
-  profiles[address] = { group, type, description, priceMaxAgeHours };
+  profiles[address] = { group: type, type, underlying: group, description, priceMaxAgeHours };
 }
 add(
   "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
@@ -91,7 +92,8 @@ add(
 export function assetProfile(address: string | null, isBridge = false): AssetProfile {
   if (isBridge)
     return {
-      group: "CHF stablecoin bridges",
+      group: "1:1 stablecoin bridge",
+      underlying: "Swiss franc",
       type: "1:1 stablecoin bridge",
       description:
         "ZCHF is issued one-for-one against another CHF stablecoin held by a bridge. Exposure depends on that stablecoin's issuer, peg and redemption availability.",
@@ -100,7 +102,8 @@ export function assetProfile(address: string | null, isBridge = false): AssetPro
   return (
     profiles[address?.toLowerCase() ?? ""] ?? {
       group: "Other / unclassified",
-      type: "Collateral asset",
+      type: "Other / unclassified",
+      underlying: "Other / unclassified",
       description:
         "An asset assessed or used as backing for collateralised ZCHF borrowing. Read the author's assessment for its ownership, backing and redemption arrangements.",
       priceMaxAgeHours: 24,

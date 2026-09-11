@@ -15,7 +15,7 @@
     "brand": { "name": "Frankencoin", "href": "/" },
     "links": [
       { "label": "Collaterals", "href": "/" },
-      { "label": "Monitoring", "href": "/attention" },
+      { "label": "Portfolio insights", "href": "/attention" },
       { "label": "Risk framework", "href": "/framework" },
       { "label": "Discussions", "href": "https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals", "external": true },
       { "label": "frankencoin.com", "href": "https://frankencoin.com", "external": true }
@@ -35,7 +35,7 @@
         "title": "Collaterals",
         "links": [
           { "label": "Overview", "href": "/" },
-          { "label": "Items requiring attention", "href": "/attention" },
+          { "label": "Portfolio insights", "href": "/attention" },
           { "label": "Risk framework", "href": "/framework" },
           { "label": "Assessments repository", "href": "https://github.com/Frankencoin-ZCHF/frankencoin-collateral-assessments", "external": true },
           { "label": "Propose a collateral", "href": "https://github.com/Frankencoin-ZCHF/Frankencoin/discussions/categories/acceptable-collaterals", "external": true }

@@ -13,7 +13,7 @@ export interface RiskParametersData {
 
 const riskParameters: SystemBlock<RiskParametersData> = {
   id: "risk-parameters",
-  title: "Risk parameters — assessed vs on-chain",
+  title: "Inspect individual settings",
   order: 30,
   enabled: (ctx) => ctx.assessment !== null && !ctx.record.live?.bridge,
   load: async (ctx) => {

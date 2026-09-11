@@ -4,7 +4,6 @@ import Section from "@/components/Layout/Section.astro";
 import CollateralHeader from "@/components/CollateralHeader.astro";
 import AssessmentSources from "@/components/AssessmentSources.astro";
 import { config } from "@/config";
-import DecisionPanel from "@/components/DecisionPanel.astro";
 import Unavailable from "@/components/Unavailable.astro";
 import ui from "@/content/ui.json";
 import { SYSTEM_BLOCKS, runBlocks, type BlockContext } from "@/blocks";
@@ -57,17 +56,17 @@ const ctx: BlockContext = { record, assessment, isHistorical, version, versions,
 const results = await runBlocks(SYSTEM_BLOCKS, ctx);
 
 const sections = [
+  { id: "assessment", title: "Risk assessment", ids: ["risk-summary", "tail-risks", "narrative", "extra-blocks"] },
   {
     id: "position-monitoring",
     title: record.live?.bridge ? "Bridge backing" : "Positions & price exposure",
     ids: ["bridge", "position-safety", "positions", "challenges"],
   },
-  { id: "assessment", title: "Risk assessment", ids: ["risk-summary", "risk-parameters", "tail-risks", "narrative", "extra-blocks"] },
-  { id: "changes-sources", title: "Changes & sources", ids: ["live-protocol", "discussion", "versions"] },
+  { id: "changes-sources", title: "Changes & sources", ids: ["risk-parameters", "live-protocol", "discussion", "versions"] },
 ];
 const grouped = new Set(sections.flatMap((s) => s.ids));
 // New content/system blocks remain discoverable even if they are not explicitly grouped yet.
-sections[1]!.ids.push(...results.filter((r) => !grouped.has(r.block.id)).map((r) => r.block.id));
+sections[0]!.ids.push(...results.filter((r) => !grouped.has(r.block.id)).map((r) => r.block.id));
 const title = `${record.name} (${record.ticker})`;
 const description = assessment
   ? `${record.ticker}: ${record.lifecycle} collateral, ${assessment.status} assessment. Free float ${assessment.data.scores.freeFloat ?? "n/a"}, observed downside ${assessment.data.scores.marketRiskPct ?? "n/a"}%, retained reserve ${assessment.data.params.retainedReservePct ?? "n/a"}%. Live positions, discussion and version history.`
@@ -91,21 +90,12 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
         </div>
       )
     }
-    <div class="mt-5">
-      <DecisionPanel
-        ctx={ctx}
-        protocolFetchedAt={set?.protocolFetchedAt ?? null}
-        protocolDegraded={set?.protocolDegraded ?? []}
-        totalDebt={collaterals.summarize(set?.records ?? []).totalMintedZchf}
-      />
-    </div>
+
   </Section>
 
   <Section pad="xxs" width="wide">
     <nav class="fc-view-tabs fc-section-nav" aria-label="Collateral sections">
-      <a href="#overview">Overview</a><a href="#position-monitoring">{record.live?.bridge ? "Bridge backing" : "Positions"}</a><a
-        href="#assessment">Assessment</a
-      ><a href="#changes-sources">Changes & sources</a>
+      <a href="#assessment">Risk assessment</a>{assessment && <a href="#tail-risks">Tail risks</a>}<a href="#position-monitoring">{record.live?.bridge ? "Bridge backing" : "Positions & price exposure"}</a><a href="#changes-sources">Sources & history</a>
     </nav>
     <div class="flex flex-col gap-8 mt-6">
       {
@@ -134,7 +124,7 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
                 .filter((r) => section.ids.includes(r.block.id))
                 .sort((a, b) => section.ids.indexOf(a.block.id) - section.ids.indexOf(b.block.id))
                 .map((r) => {
-                  const disclosed = ["narrative", "tail-risks", "live-protocol", "discussion", "versions"].includes(r.block.id);
+                  const disclosed = ["narrative", "risk-parameters", "live-protocol", "discussion", "versions"].includes(r.block.id);
                   return disclosed ? (
                     <details id={r.block.id} class="fc-card p-5 min-w-0 lg:col-span-2 scroll-mt-24">
                       <summary class="ty-title-3 font-bold cursor-pointer">

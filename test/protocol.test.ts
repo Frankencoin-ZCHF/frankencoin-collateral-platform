@@ -64,7 +64,8 @@ describe("buildSnapshot — aggregates from /ecosystem/collateral/stats", () => 
     expect(p.liquidationPriceZchf).toBeGreaterThan(10_000);
     expect(p.liquidationPriceZchf).toBeLessThan(500_000);
     const v1 = [...snap.values()].flatMap((c) => c.positions.list).find((p) => p.version === 1)!;
-    expect(v1.riskPremiumPct).toBeGreaterThan(0);
+    expect(v1.riskPremiumPct).toBeNull();
+    expect(v1.annualInterestPct).toBeGreaterThan(0);
   });
 
   it("computes position safety from active priced positions", () => {

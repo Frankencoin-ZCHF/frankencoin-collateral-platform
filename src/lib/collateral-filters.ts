@@ -17,3 +17,18 @@ export function matchesFilters(row: CollateralRow, view: CollateralView, query =
     `${row.ticker} ${row.name} ${row.address ?? ""}`.toLowerCase().includes(query.trim().toLowerCase())
   );
 }
+
+export const SORTS = ["exposure", "name", "backing", "interest"] as const;
+export type CollateralSort = (typeof SORTS)[number];
+export function collateralSort(value: string | null): CollateralSort {
+  return SORTS.includes(value as CollateralSort) ? value as CollateralSort : "exposure";
+}
+export function sortRows(rows: CollateralRow[], sort: CollateralSort): CollateralRow[] {
+  return [...rows].sort((a, b) => {
+    if (sort === "name") return a.name.localeCompare(b.name);
+    const key = sort === "backing" ? "overcollateralisationPct" : sort === "interest" ? "effectiveInterestAvgPct" : "mintedZchf";
+    const av = a[key], bv = b[key];
+    if (av === null || bv === null) return av === bv ? a.name.localeCompare(b.name) : av === null ? 1 : -1;
+    return (sort === "exposure" ? bv - av : av - bv) || a.name.localeCompare(b.name);
+  });
+}
