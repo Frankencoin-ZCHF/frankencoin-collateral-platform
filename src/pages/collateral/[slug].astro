@@ -1,6 +1,7 @@
 ---
 import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
+import ExecutiveSummary from "@/components/ExecutiveSummary.astro";
 import CollateralHeader from "@/components/CollateralHeader.astro";
 import AssessmentSources from "@/components/AssessmentSources.astro";
 import { config } from "@/config";
@@ -56,14 +57,16 @@ const ctx: BlockContext = { record, assessment, isHistorical, version, versions,
 const results = await runBlocks(SYSTEM_BLOCKS, ctx);
 
 const sections = [
-  { id: "assessment", title: "Risk assessment", ids: ["risk-summary", "tail-risks", "narrative", "extra-blocks"] },
+  { id: "assessment", title: "Risk data & lending terms", ids: ["risk-summary", "tail-risks"] },
   {
     id: "position-monitoring",
     title: record.live?.bridge ? "Bridge backing" : "Positions & price exposure",
     ids: ["bridge", "position-safety", "positions", "challenges"],
   },
+  { id: "full-assessment", title: "Full assessment", ids: ["narrative", "extra-blocks"] },
   { id: "changes-sources", title: "Changes & sources", ids: ["risk-parameters", "live-protocol", "discussion", "versions"] },
 ];
+const hasNarrative = Boolean(assessment?.body.trim());
 const grouped = new Set(sections.flatMap((s) => s.ids));
 // New content/system blocks remain discoverable even if they are not explicitly grouped yet.
 sections[0]!.ids.push(...results.filter((r) => !grouped.has(r.block.id)).map((r) => r.block.id));
@@ -90,16 +93,21 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
         </div>
       )
     }
-
+    <ExecutiveSummary ctx={ctx} />
   </Section>
 
   <Section pad="xxs" width="wide">
     <nav class="fc-view-tabs fc-section-nav" aria-label="Collateral sections">
-      <a href="#assessment">Risk assessment</a>{assessment && <a href="#tail-risks">Tail risks</a>}<a href="#position-monitoring">{record.live?.bridge ? "Bridge backing" : "Positions & price exposure"}</a><a href="#changes-sources">Sources & history</a>
+      <a href="#collateral-executive-summary">Summary</a>
+      <a href="#assessment">Risk data & lending terms</a>
+      {assessment && <a href="#tail-risks">Tail risks</a>}
+      <a href="#position-monitoring">{record.live?.bridge ? "Bridge backing" : "Positions & price exposure"}</a>
+      {hasNarrative && <a href="#narrative" class="fc-full-assessment-nav">Full assessment</a>}
+      <a href="#changes-sources">Sources & history</a>
     </nav>
     <div class="flex flex-col gap-8 mt-6">
       {
-        sections.map((section) => (
+        sections.filter((section) => section.id !== "full-assessment" || results.some((r) => section.ids.includes(r.block.id))).map((section) => (
           <section id={section.id} class="scroll-mt-24" aria-labelledby={`${section.id}-heading`}>
             <h2 id={`${section.id}-heading`} class="ty-title-2 font-bold mb-4">
               {section.title}
@@ -109,13 +117,6 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
                 <AssessmentSources ctx={ctx} />
               </div>
             )}
-            {section.id === "assessment" && !assessment && (
-              <p class="fc-notice">
-                {record.assessmentUnavailable
-                  ? "The assessment could not be loaded in this snapshot."
-                  : "No assessment is available for this asset yet."}
-              </p>
-            )}
             {section.id === "position-monitoring" && !results.some((r) => section.ids.includes(r.block.id)) && (
               <p class="ty-small">No on-chain positions are available for this contract.</p>
             )}
@@ -124,15 +125,11 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
                 .filter((r) => section.ids.includes(r.block.id))
                 .sort((a, b) => section.ids.indexOf(a.block.id) - section.ids.indexOf(b.block.id))
                 .map((r) => {
-                  const disclosed = ["narrative", "risk-parameters", "live-protocol", "discussion", "versions"].includes(r.block.id);
+                  const disclosed = ["risk-parameters", "live-protocol", "discussion", "versions"].includes(r.block.id);
                   return disclosed ? (
                     <details id={r.block.id} class="fc-card p-5 min-w-0 lg:col-span-2 scroll-mt-24">
                       <summary class="ty-title-3 font-bold cursor-pointer">
-                        {r.block.id === "narrative"
-                          ? "Read the full assessment"
-                          : r.block.id === "live-protocol"
-                            ? "All protocol parameters"
-                            : r.block.title}
+                        {r.block.id === "live-protocol" ? "All protocol parameters" : r.block.title}
                       </summary>
                       <div class="mt-4">
                         {r.status === "ok" ? (

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { assetProfile } from "@/lib/assets";
 import { collateralView, inView, matchesFilters } from "@/lib/collateral-filters";
 import { toRow } from "@/lib/rows";
-import { assessmentExcerpt } from "@/services/assessment-summary";
+import { assessmentExcerpt, assessmentSummary } from "@/services/assessment-summary";
 import { itemsFor, monitoringStatus } from "@/services/attention";
 import { join } from "@/services/collaterals";
 import { exposureGroups, monitoringComplete, monitoringCoverage, priceQuality, priceScenario } from "@/services/monitoring";
@@ -165,6 +165,37 @@ describe("exposure browsing", () => {
 });
 
 describe("author's opening summary", () => {
+  it("keeps the complete authored summary, including short paragraphs, without the next section", () => {
+    const summary = assessmentSummary("# Asset assessment\n\n## Summary\n\nFirst conclusion.\n\nSecond conclusion.\n\nThird conclusion.\n\nFourth conclusion.\n\n## Introduction\n\nThe rest of the report.");
+    expect(summary.kind).toBe("summary");
+    expect(summary.html.match(/<p>/g)).toHaveLength(4);
+    expect(summary.html).toContain("Fourth conclusion.");
+    expect(summary.html).not.toContain("Introduction");
+    expect(summary.html).not.toContain("rest of the report");
+  });
+  it("retains lists and nested headings while leaving full-report anchor IDs unique", () => {
+    const summary = assessmentSummary("## 1. **Executive Summary**\n\nA short conclusion.\n\n### Conditions\n\n- First condition\n- Second condition\n\n## Analysis\n\nMore detail.");
+    expect(summary.kind).toBe("summary");
+    expect(summary.html).toContain("<h3>Conditions</h3>");
+    expect(summary.html).toContain("<li>Second condition</li>");
+    expect(summary.html).not.toContain(" id=");
+    expect(summary.html).not.toContain("More detail.");
+  });
+  it("labels missing or empty summary sections as excerpts, without inventing text", () => {
+    const paragraph = "This document uses a different structure and its opening explanation is still available to the reader.";
+    for (const body of [paragraph, `## Summary\n\n## Context\n\n${paragraph}`]) {
+      const result = assessmentSummary(body);
+      expect(result.kind).toBe("excerpt");
+      expect(result.html).toContain(paragraph);
+    }
+    expect(assessmentSummary("")).toEqual({ kind: "excerpt", html: "" });
+  });
+  it("sanitises markup in the authored summary and removes duplicate author IDs", () => {
+    const summary = assessmentSummary('## Summary\n\n<img src="x" onerror="alert(1)"> <span id="author-anchor">Conclusion.</span> [unsafe](javascript:alert(1))\n\n<script>alert(1)</script>\n\n## Analysis\n\nDetail.');
+    expect(summary.kind).toBe("summary");
+    expect(summary.html).toContain("Conclusion.");
+    expect(summary.html).not.toMatch(/onerror|javascript:|<script| id=/);
+  });
   it("preserves the author's words without relying on standard headings", () => {
     const paragraph = "This asset depends on its custodian and redemption process, which must be considered alongside its market price.";
     const html = assessmentExcerpt(

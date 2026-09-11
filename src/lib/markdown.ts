@@ -80,10 +80,20 @@ export function sanitizeHtml(html: string): string {
 }
 
 /** Render markdown. Placeholders survive sanitization because DOMPurify keeps comments off by default only for scripts — we re-insert them after sanitizing. */
-export function renderMarkdown(markdown: string): RenderedMarkdown {
+export function renderMarkdown(markdown: string, options: { headingIdPrefix?: string } = {}): RenderedMarkdown {
   const state = { fences: [] as BlockFence[], headings: [] as RenderedMarkdown["headings"], ids: new Map<string, number>() };
   const md = createMarked(state);
-  const rawHtml = md.parse(markdown, { async: false }) as string;
+  let rawHtml = md.parse(markdown, { async: false }) as string;
+  // Embedded reports can share heading names with the surrounding page. Keep their
+  // table of contents and author-written section links within the same namespace.
+  if (options.headingIdPrefix) {
+    const ids = new Map(state.headings.map((h) => [h.id, `${options.headingIdPrefix}${h.id}`]));
+    rawHtml = rawHtml.replace(/ (id|href)="([^"]*)"/g, (attribute, name, value: string) => {
+      const id = name === "href" && value.startsWith("#") ? ids.get(value.slice(1)) : name === "id" ? ids.get(value) : undefined;
+      return id ? ` ${name}="${name === "href" ? "#" : ""}${escapeAttr(id)}"` : attribute;
+    });
+    state.headings = state.headings.map((h) => ({ ...h, id: ids.get(h.id)! }));
+  }
 
   // DOMPurify strips HTML comments; protect the placeholders with a marker element, then restore.
   const protectedHtml = rawHtml.replace(BLOCK_PLACEHOLDER_RE, (_m, i) => `<fc-block data-index="${i}"></fc-block>`);

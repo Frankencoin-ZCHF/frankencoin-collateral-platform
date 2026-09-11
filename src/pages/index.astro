@@ -50,9 +50,18 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
 
 <Base>
   <Section pad="xs" width="wide" id="top">
-    <div class="flex flex-wrap items-baseline justify-between gap-3 mb-5">
-      <h1 class="ty-title-1">Collaterals</h1>
+    <div class="flex flex-wrap items-baseline justify-between gap-3 mb-3">
+      <h1 class="ty-title-1">Frankencoin collateral assessments</h1>
       <a href="/attention" class="ty-small underline">Portfolio insights →</a>
+    </div>
+    <div class="max-w-3xl mb-6" id="platform-introduction">
+      <p class="ty-body-2 text-[var(--color-neutral-650)]">
+        Frankencoin (ZCHF) is backed by deposited collateral and CHF stablecoin bridges. This platform brings together
+        each asset’s risk assessment, on-chain exposure and lending terms, so you can understand the assets behind ZCHF and the risks they carry.
+      </p>
+      <p class="ty-small text-[var(--color-gray-75)] mt-2">
+        Open an asset to read its assessment, or explore the <a href="/framework" class="underline">risk framework</a> to learn how collateral is evaluated.
+      </p>
     </div>
     {config.protocolFixturesDir && <p class="fc-notice mb-4">Sample protocol snapshot. These figures are not the current protocol state.</p>}
     {!protocolAvailable && <p class="fc-notice mb-4" role="status">Protocol data is unavailable. You can still explore the assessments.</p>}
@@ -74,7 +83,7 @@ Astro.response.headers.set("Cache-Control", "public, max-age=60, s-maxage=60");
   <Section pad="xxs" width="wide" id="collaterals">
     <div class="flex flex-col gap-4">
       <div class="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 class="ty-title-2 font-bold">Compare assets</h2>
+        <h2 class="ty-title-2 font-bold">Asset overview</h2>
         <p id="overview-count" class="ty-small text-[var(--color-gray-75)]" role="status" aria-live="polite">{visibleCount} assets</p>
       </div>
       <nav class="fc-view-tabs" aria-label="Asset views">{views.map(([value, label]) => <a href={viewHref(value)} data-overview-view={value} aria-current={view === value ? "page" : undefined}>{label}</a>)}</nav>

@@ -21,12 +21,12 @@ export interface NarrativeData {
 
 const narrative: SystemBlock<NarrativeData> = {
   id: "narrative",
-  title: "Assessment",
+  title: "Analysis & supporting evidence",
   order: 50,
   enabled: (ctx) => ctx.assessment !== null && ctx.assessment.body.trim().length > 0,
   timeoutMs: 8_000,
   load: async (ctx) => {
-    const r = renderMarkdown(ctx.assessment!.body);
+    const r = renderMarkdown(ctx.assessment!.body, { headingIdPrefix: "assessment-" });
     const results = await loadContentBlocks(
       r.fences.map((f) => ({ index: f.index, source: "fence" as const, raw: f.yaml })),
       ctx,
