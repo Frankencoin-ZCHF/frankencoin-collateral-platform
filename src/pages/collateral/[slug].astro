@@ -3,6 +3,7 @@ import Base from "@/layouts/Base.astro";
 import Section from "@/components/Layout/Section.astro";
 import ExecutiveSummary from "@/components/ExecutiveSummary.astro";
 import CollateralHeader from "@/components/CollateralHeader.astro";
+import CommunityDiscussion from "@/components/CommunityDiscussion.astro";
 import AssessmentSources from "@/components/AssessmentSources.astro";
 import { config } from "@/config";
 import Unavailable from "@/components/Unavailable.astro";
@@ -12,6 +13,7 @@ import { describeForLog } from "@/lib/errors";
 import { isValidSlug, normalizeSha } from "@/lib/slug";
 import * as assessments from "@/services/assessments";
 import * as collaterals from "@/services/collaterals";
+import type { DiscussionResult } from "@/services/discussions";
 import type { Assessment, VersionRef } from "@/types";
 
 export const prerender = false;
@@ -55,6 +57,9 @@ if (record.assessment) {
 
 const ctx: BlockContext = { record, assessment, isHistorical, version, versions, origin: Astro.url.origin };
 const results = await runBlocks(SYSTEM_BLOCKS, ctx);
+// Reuse the discussion block's resolved thread; the hero adds no upstream requests.
+const discussionResult = results.find((r) => r.block.id === "discussion");
+const discussionData = discussionResult?.status === "ok" ? discussionResult.data as DiscussionResult | null : null;
 
 const sections = [
   { id: "assessment", title: "Risk data & lending terms", ids: ["risk-summary", "tail-risks"] },
@@ -80,7 +85,10 @@ Astro.response.headers.set("Cache-Control", isHistorical ? "public, max-age=3600
 
 <Base title={title} description={description} type="article" noindex={isHistorical}>
   <Section variant="accent" pad="xs" width="wide" id="overview">
-    <CollateralHeader ctx={ctx} />
+    <div class="fc-detail-hero">
+      <CollateralHeader ctx={ctx} />
+      <CommunityDiscussion ctx={ctx} data={discussionData} />
+    </div>
     {
       config.protocolFixturesDir && (
         <p class="fc-notice mt-4">Sample protocol snapshot. These figures are not the current protocol state.</p>

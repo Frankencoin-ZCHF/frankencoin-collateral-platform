@@ -1,0 +1,32 @@
+---
+import type { BlockContext } from "@/blocks/types";
+import Button from "@/components/Button/Button.astro";
+import { categoryUrl, type DiscussionResult } from "@/services/discussions";
+
+interface Props {
+  ctx: BlockContext;
+  data: DiscussionResult | null;
+}
+const { ctx, data } = Astro.props;
+// Community participation always points to the current thread, including on historical pages.
+const declaredUrl = ctx.record.assessment?.data.discussionUrl ?? data?.declaredUrl;
+const threadUrl = declaredUrl ?? data?.primary?.url;
+const suggested = !declaredUrl && data?.primary?.matchedBy === "heuristic";
+---
+
+<aside id="community-discussion" class="fc-card p-5 md:p-6" aria-labelledby="community-discussion-title">
+  <div class="flex items-center gap-2 mb-3 text-[var(--color-brand-deep-blue)]">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+      <path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-9l-5 3v-3a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" />
+      <path d="M7 9h10M7 13h7" />
+    </svg>
+    <h2 id="community-discussion-title" class="ty-title-3 font-bold">Community discussion</h2>
+  </div>
+  <p class="ty-small text-[var(--color-neutral-650)] mb-4">
+    Help assess {ctx.record.ticker}. Ask questions, share evidence or suggest improvements with the Frankencoin community.
+  </p>
+  {suggested && <p class="ty-xs text-[var(--color-gray-75)] mb-3">Suggested discussion for this asset</p>}
+  <Button href={threadUrl ?? data?.categoryUrl ?? categoryUrl()} variant="primary" size="sm" external withExternalIcon>
+    {threadUrl ? "Join the discussion on GitHub" : "Browse collateral discussions"}
+  </Button>
+</aside>

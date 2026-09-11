@@ -235,3 +235,8 @@
 .fc-assessment-chapter > summary { padding: 18px 8px; cursor: pointer; font-weight: 600; color: var(--color-brand-deep-blue); }
 .fc-assessment-chapter > summary:hover { background: var(--color-neutral-100); }
 .fc-assessment-chapter-body { padding: 0 8px 20px; }
+
+.fc-detail-hero { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 24px; }
+@media (min-width: 1024px) {
+  .fc-detail-hero { grid-template-columns: minmax(0, 1fr) 21rem; gap: 32px; }
+}
