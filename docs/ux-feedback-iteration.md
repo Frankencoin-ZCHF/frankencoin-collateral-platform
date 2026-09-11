@@ -31,3 +31,11 @@ Sources checked: the assessment framework's Parameter Calibration section, `Posi
 - Offline production-server checks with protocol fixtures and a local assessment clone: overview filters and sorting, collateral/bridge pages, assessment-first order, expanded tail risks, sources, historical assessments, comparisons, JSON API and health endpoint. Checked heading/ARIA references, deep links and the absence of inline executable scripts.
 
 Full browser visual and interaction checks remain outstanding because browser access to the local server is restricted in the implementation environment. The production checks verify returned HTML and data, not pixel layout.
+
+## Follow-up: platform context and assessment reading
+
+- Added a short platform introduction and renamed “Compare assets” to “Asset overview”.
+- Restored the author's complete executive summary above quantitative data, with assessment author, date and stage. Nonstandard reports use a clearly labelled opening excerpt; historical pages use their selected assessment.
+- Made the full assessment a visible section with a prominent link near the summary, a contents list on the left on desktop (above the chapters on mobile), and individually expandable chapter titles. Readers can expand or collapse all chapters; each chapter remains accessible without JavaScript.
+- Kept report chapter anchors separate from quantitative section anchors, updated internal report links, and retained legacy deep-link handling.
+- Verified with 123 unit tests, Astro checking, a production build and offline production HTML checks covering long summaries, historical assessments, chapter contents links and unassessed bridges. The browser verification limitation above still applies.

@@ -220,3 +220,18 @@
   .fc-category-grid { display: flex; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; }
   .fc-category-card { flex: 0 0 225px; scroll-snap-align: start; }
 }
+
+.fc-summary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; margin-top: 24px; border-top: 1px solid var(--color-gray-20); padding-top: 18px; }
+.fc-report-link { display: inline-flex; align-items: center; gap: 12px; padding: 12px 18px; border-radius: 8px; background: var(--color-brand-deep-blue); color: white; font-weight: 600; font-size: 14px; }
+.fc-report-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.fc-view-tabs .fc-full-assessment-nav { font-weight: 700; border-color: var(--color-brand-deep-blue); }
+#collateral-executive-summary .fc-summary-prose { max-width: 90ch; }
+#narrative .fc-prose > section:first-child > h1:first-child { margin-top: 0; }
+#narrative .fc-prose [id] { scroll-margin-top: 6rem; }
+.fc-assessment-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding-bottom: 20px; }
+.fc-assessment-tools [data-assessment-controls]:not([hidden]) { display: flex; gap: 24px; }
+.fc-assessment-chapter { border-top: 1px solid var(--color-gray-20); }
+.fc-assessment-chapter:last-child { border-bottom: 1px solid var(--color-gray-20); }
+.fc-assessment-chapter > summary { padding: 18px 8px; cursor: pointer; font-weight: 600; color: var(--color-brand-deep-blue); }
+.fc-assessment-chapter > summary:hover { background: var(--color-neutral-100); }
+.fc-assessment-chapter-body { padding: 0 8px 20px; }

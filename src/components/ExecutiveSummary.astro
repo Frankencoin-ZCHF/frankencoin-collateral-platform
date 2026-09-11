@@ -1,0 +1,27 @@
+---
+import type { BlockContext } from "@/blocks/types";
+import { assessmentSummary } from "@/services/assessment-summary";
+import { formatDate } from "@/lib/numbers";
+interface Props { ctx: BlockContext }
+const { ctx } = Astro.props;
+const assessment = ctx.assessment;
+const summary = assessment ? assessmentSummary(assessment.body) : null;
+const hasNarrative = Boolean(assessment?.body.trim());
+const stage = assessment?.status === "draft" ? "Draft assessment" : assessment?.status === "deprecated" ? "Archived assessment" : "Published assessment";
+---
+<section id="collateral-executive-summary" class="fc-card p-5 md:p-6 mt-6 scroll-mt-24" aria-labelledby="collateral-executive-summary-title">
+  <h2 id="collateral-executive-summary-title" class="ty-title-2 font-bold">{summary?.kind === "summary" ? "Executive summary" : "Assessment overview"}</h2>
+  {assessment && <p class="ty-small text-[var(--color-gray-75)] mt-2 mb-4">
+    {stage} by {assessment.data.author} · {formatDate(assessment.data.assessmentDate)}
+    {assessment.data.assessmentDate > new Date().toISOString().slice(0, 10) && " · future-dated; verify the author’s date"}
+    {summary?.kind === "excerpt" && " · opening excerpt"}
+  </p>}
+  {summary?.html ? <div class="fc-prose fc-summary-prose" set:html={summary.html} /> : <p class="ty-body-2 mt-3 text-[var(--color-gray-75)]">
+    {ctx.record.assessmentUnavailable ? "The assessment could not be loaded. Available protocol data is shown below." : assessment ? "This assessment has no written summary yet. Its risk parameters are shown below." : "No written risk assessment is available for this asset yet. Available protocol data is shown below."}
+  </p>}
+  <div class="fc-summary-actions">
+    {hasNarrative && <a href="#narrative" class="fc-report-link">Read the full assessment <span aria-hidden="true">↓</span></a>}
+    <a href="#assessment" class="ty-small underline">View risk data & lending terms ↓</a>
+  </div>
+  {hasNarrative && <p class="ty-small text-[var(--color-gray-75)] mt-2">The complete analysis and supporting evidence are included further down this page.</p>}
+</section>

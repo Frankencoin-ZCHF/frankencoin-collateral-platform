@@ -41,4 +41,15 @@ describe("renderMarkdown", () => {
     expect(r.html).toContain('id="risk"');
     expect(r.html).toContain('id="risk-1"');
   });
+
+  it("keeps report links and section IDs together without colliding with page navigation", () => {
+    const r = renderMarkdown('[Read the risks](#tail-risks)\n\n## Tail Risks\n\n[Repeated section](#tail-risks-1) [Elsewhere](https://example.com/#tail-risks) [Page](#overview)\n\n## Tail Risks\n', { headingIdPrefix: "assessment-" });
+    expect(r.headings.map((h) => h.id)).toEqual(["assessment-tail-risks", "assessment-tail-risks-1"]);
+    expect(splitSections(r.html).filter((s) => s.heading).map((s) => s.id)).toEqual(r.headings.map((h) => h.id));
+    expect(r.html).toContain('href="#assessment-tail-risks"');
+    expect(r.html).toContain('href="#assessment-tail-risks-1"');
+    expect(r.html).toContain('href="https://example.com/#tail-risks"');
+    expect(r.html).toContain('href="#overview"');
+    expect(r.html).not.toContain('id="tail-risks"');
+  });
 });

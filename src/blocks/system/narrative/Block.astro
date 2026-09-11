@@ -1,21 +1,36 @@
 ---
+import type { BlockContext } from "@/blocks/types";
+import { formatDate } from "@/lib/numbers";
 import type { NarrativeData } from "./index";
 import ContentBlock from "@/blocks/content/ContentBlock.astro";
 interface Props {
   data: NarrativeData;
+  ctx: BlockContext;
 }
-const { data } = Astro.props as Props;
-const h2s = data.headings.filter((h) => h.level === 2);
+const { data, ctx } = Astro.props as Props;
+const chapters = data.sections.filter((s) => s.heading && s.id);
 ---
 
-<div class="flex flex-col lg:flex-row gap-8">
+<p class="ty-small text-[var(--color-gray-75)] mb-5">
+  Complete assessment by {ctx.assessment?.data.author} · {formatDate(ctx.assessment?.data.assessmentDate)} · {ctx.assessment?.status}
+  {ctx.isHistorical && " · historical version"}
+</p>
+<div data-assessment-reader>
+  {chapters.length > 0 && <div class="fc-assessment-tools">
+    <p class="ty-small text-[var(--color-gray-75)]">Choose a chapter to read its analysis. Every chapter of the assessment is listed below.</p>
+    <div data-assessment-controls hidden>
+      <button type="button" data-assessment-expand class="ty-small underline">Expand all</button>
+      <button type="button" data-assessment-collapse class="ty-small underline">Collapse all</button>
+    </div>
+  </div>}
+  <div class="flex flex-col lg:flex-row gap-8">
   {
-    h2s.length > 2 && (
+    chapters.length > 0 && (
       <aside class="lg:w-56 shrink-0 lg:sticky lg:top-24 self-start order-first">
-        <p class="fc-card-title mb-2">Sections</p>
-        <nav class="flex flex-col gap-1">
-          {h2s.map((h) => (
-            <a href={`#${h.id}`} class="ty-small text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)]">{h.text}</a>
+        <p class="fc-card-title mb-2">In this assessment</p>
+        <nav class="flex flex-col gap-1" aria-label="Full assessment contents">
+          {chapters.map((s) => (
+            <a href={`#${s.id}`} class="ty-small text-[var(--color-blue-39)] hover:text-[var(--color-brand-swiss)]">{s.heading}</a>
           ))}
         </nav>
       </aside>
@@ -23,12 +38,26 @@ const h2s = data.headings.filter((h) => h.level === 2);
   }
   <article class="fc-prose min-w-0 flex-1 max-w-3xl">
     {
-      data.sections.map((s) => (
+      data.sections.map((s) => s.heading ? (
+        <details id={s.id ?? undefined} class="fc-assessment-chapter" data-assessment-chapter>
+          <summary>{s.heading}</summary>
+          <div class="fc-assessment-chapter-body">
+            {s.parts.map((p) => (p.block ? <ContentBlock result={p.block} /> : <Fragment set:html={p.html} />))}
+          </div>
+        </details>
+      ) : (
         <section>
-          {s.heading && <h2 id={s.id ?? undefined}>{s.heading}</h2>}
           {s.parts.map((p) => (p.block ? <ContentBlock result={p.block} /> : <Fragment set:html={p.html} />))}
         </section>
       ))
     }
   </article>
+  </div>
 </div>
+
+<a href="#collateral-executive-summary" class="ty-small underline mt-6 inline-block">Back to summary ↑</a>
+
+<script>
+  import { initAssessmentReaders } from "@/scripts/assessment-reader";
+  initAssessmentReaders();
+</script>
