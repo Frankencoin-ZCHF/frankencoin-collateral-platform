@@ -38,11 +38,18 @@ cp .env.example .env      # optional — set GITHUB_TOKEN for discussions + hist
 yarn dev                  # http://localhost:3000
 yarn build && yarn start  # production (node ./dist/server/entry.mjs)
 yarn test                 # unit tests (vitest)
+yarn audit                # all severities must pass, as enforced in CI
 yarn dev:offline          # no network: local clone of the assessments repo + JSON fixtures (see .env.offline)
 yarn run check            # astro check (plain `yarn check` checks dependency integrity)
 ```
 
 Machine-readable endpoints: `/api/collaterals.json`, `/api/collateral/<ticker>.json`, `/health`.
+
+Dependencies are refreshed to the latest stable releases as of 2026-10-27, with transitive
+dependencies resolved within their upstream compatibility constraints. TypeScript stays on
+the newest supported 6.x release (6.0.3): Astro 7.4.2's `astro check` rejects TypeScript 7.0,
+and its experimental replacement requires TypeScript 7.1+. CI keeps full type checking and
+fails on any dependency advisory or audit error; there are no advisory exceptions.
 
 ## Deployment
 

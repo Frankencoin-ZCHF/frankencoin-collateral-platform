@@ -9,19 +9,15 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: yarn
       - run: yarn install --frozen-lockfile
-      # Fail on any moderate-or-higher advisory (yarn audit exits with a bitmask; 4 = moderate, 8 = high, 16 = critical).
-      - name: yarn audit (moderate+)
-        run: |
-          set +e
-          yarn audit --level moderate
-          code=$?
-          if [ $code -ge 4 ]; then echo "::error::yarn audit found moderate-or-higher advisories (exit $code)"; exit 1; fi
+      # Fail on every reported vulnerability and on audit/registry errors.
+      - name: Dependency security audit
+        run: yarn audit
       - run: yarn run check
       - run: yarn test
       - run: yarn build
