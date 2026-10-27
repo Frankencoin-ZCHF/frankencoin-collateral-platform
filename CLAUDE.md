@@ -133,8 +133,10 @@ minting has ended. AG Grid loads only when “Advanced data & export” opens (`
 
 ## Gotchas
 
-- Runtime: Node ≥ 22.22.2 (`isomorphic-dompurify` engine constraint); `.nvmrc`/`.node-version` pin
-  26 for Railway and CI. Never install with `--ignore-engines`.
+- Runtime: Node 26.x; `package.json` engines, `.nvmrc`, and `.node-version` must stay aligned
+  for Railway (Railpack) and CI. Railpack reads `engines.node` before `.nvmrc`. Nixpacks' pinned
+  Node 24.10.0 does not satisfy the locked `isomorphic-dompurify` engine constraint. Never install
+  with `--ignore-engines`.
 
 - **Number encodings:** token amounts are BigInt strings → `fromWei(v, decimals)`; position
   liquidation prices are scaled by `36 - decimals`; `riskPremiumPPM`/`reserveContribution` are PPM

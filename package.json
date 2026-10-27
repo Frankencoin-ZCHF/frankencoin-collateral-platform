@@ -17,7 +17,7 @@
     "build:offline": "astro build --mode offline"
   },
   "engines": {
-    "node": ">=22.22.2"
+    "node": "26.x"
   },
   "dependencies": {
     "@astrojs/node": "^11",

@@ -46,9 +46,15 @@ Machine-readable endpoints: `/api/collaterals.json`, `/api/collateral/<ticker>.j
 
 ## Deployment
 
-Node ≥ 22.22.2 (pinned to 26 via `.nvmrc`); standalone server; `PORT` is honoured. On Railway/nixpacks the `build` and `start` scripts are
-picked up automatically and `/health` is the health check (see `railway.json`). Set `SITE` to the
-public origin and `GITHUB_TOKEN` (read-only, `public_repo` + `read:discussion`).
+Node 26.x, aligned across `package.json`, `.nvmrc`, and `.node-version`; standalone server;
+`PORT` is honoured. Railway uses Railpack to install dependencies from `yarn.lock`, then runs
+`yarn build`. The start command and `/health` health check are configured in `railway.json`.
+Set `SITE` to the public origin and `GITHUB_TOKEN` (read-only, `public_repo` + `read:discussion`).
+
+Railpack reads `engines.node` before `.nvmrc`, so keep these version settings aligned. No Node
+version override is needed in Railway; if `RAILPACK_NODE_VERSION` is already set, remove it or
+set it to `26`. Do not switch back to Nixpacks: its pinned Node 24.10.0 is below the Node 24.15.0
+minimum required by the locked `isomorphic-dompurify` version.
 
 ## Refreshing test fixtures
 
