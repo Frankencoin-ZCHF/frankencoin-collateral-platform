@@ -38,17 +38,30 @@ cp .env.example .env      # optional — set GITHUB_TOKEN for discussions + hist
 yarn dev                  # http://localhost:3000
 yarn build && yarn start  # production (node ./dist/server/entry.mjs)
 yarn test                 # unit tests (vitest)
+yarn audit                # all severities must pass, as enforced in CI
 yarn dev:offline          # no network: local clone of the assessments repo + JSON fixtures (see .env.offline)
 yarn run check            # astro check (plain `yarn check` checks dependency integrity)
 ```
 
 Machine-readable endpoints: `/api/collaterals.json`, `/api/collateral/<ticker>.json`, `/health`.
 
+Dependencies are refreshed to the latest stable releases as of 2026-10-27, with transitive
+dependencies resolved within their upstream compatibility constraints. TypeScript stays on
+the newest supported 6.x release (6.0.3): Astro 7.4.2's `astro check` rejects TypeScript 7.0,
+and its experimental replacement requires TypeScript 7.1+. CI keeps full type checking and
+fails on any dependency advisory or audit error; there are no advisory exceptions.
+
 ## Deployment
 
-Node ≥ 22.22.2 (pinned to 26 via `.nvmrc`); standalone server; `PORT` is honoured. On Railway/nixpacks the `build` and `start` scripts are
-picked up automatically and `/health` is the health check (see `railway.json`). Set `SITE` to the
-public origin and `GITHUB_TOKEN` (read-only, `public_repo` + `read:discussion`).
+Node 26.x, aligned across `package.json`, `.nvmrc`, and `.node-version`; standalone server;
+`PORT` is honoured. Railway uses Railpack to install dependencies from `yarn.lock`, then runs
+`yarn build`. The start command and `/health` health check are configured in `railway.json`.
+Set `SITE` to the public origin and `GITHUB_TOKEN` (read-only, `public_repo` + `read:discussion`).
+
+Railpack reads `engines.node` before `.nvmrc`, so keep these version settings aligned. No Node
+version override is needed in Railway; if `RAILPACK_NODE_VERSION` is already set, remove it or
+set it to `26`. Do not switch back to Nixpacks: its pinned Node 24.10.0 is below the Node 24.15.0
+minimum required by the locked `isomorphic-dompurify` version.
 
 ## Refreshing test fixtures
 

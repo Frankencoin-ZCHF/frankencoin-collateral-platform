@@ -17,30 +17,31 @@
     "build:offline": "astro build --mode offline"
   },
   "engines": {
-    "node": ">=22.22.2"
+    "node": "26.x"
   },
   "dependencies": {
-    "@astrojs/node": "^11",
+    "@astrojs/node": "^11.1.9",
     "@noble/hashes": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
-    "ag-grid-community": "^36.1.0",
-    "alpinejs": "^3.17.1",
-    "astro": "^7",
+    "ag-grid-community": "^36.2.0",
+    "alpinejs": "^3.17.5",
+    "astro": "^7.4.2",
     "diff": "^9.0.0",
     "diff2html": "^3.4.56",
     "echarts": "^6.1.0",
-    "isomorphic-dompurify": "^4.1.0",
-    "marked": "^18.0.11",
+    "isomorphic-dompurify": "^4.6.0",
+    "marked": "^18.1.2",
     "tailwindcss": "^4.3.3",
-    "undici": "^8.10.2",
-    "yaml": "^2.9.0",
-    "zod": "^4.5.4"
+    "undici": "^8.12.3",
+    "yaml": "^2.9.1",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
-    "@types/alpinejs": "^3.13.11",
-    "@types/node": "^26.4.1",
-    "typescript": "^5",
-    "vitest": "^5.0.0"
+    "@astrojs/check": "^0.9.12",
+    "@emnapi/runtime": "^1.11.3",
+    "@types/alpinejs": "^3.17.0",
+    "@types/node": "^26.6.5",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.5"
   }
 }

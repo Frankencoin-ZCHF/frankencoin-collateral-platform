@@ -23,7 +23,7 @@ yarn dev                 # http://localhost:3000 (PORT env overrides)
 yarn dev:offline         # no network: assessments from a local clone + protocol fixtures (.env.offline)
 yarn build && yarn start # production: node ./dist/server/entry.mjs
 yarn run check           # astro check (plain `yarn check` checks dependencies)
-yarn audit --level moderate   # must be clean — CI fails otherwise
+yarn audit              # must be clean at every severity — CI fails otherwise
 yarn test                # vitest, all suites
 yarn test test/protocol.test.ts    # one file
 yarn test -t "matchThreads"        # one test name
@@ -133,8 +133,14 @@ minting has ended. AG Grid loads only when “Advanced data & export” opens (`
 
 ## Gotchas
 
-- Runtime: Node ≥ 22.22.2 (`isomorphic-dompurify` engine constraint); `.nvmrc`/`.node-version` pin
-  26 for Railway and CI. Never install with `--ignore-engines`.
+- Runtime: Node 26.x; `package.json` engines, `.nvmrc`, and `.node-version` must stay aligned
+  for Railway (Railpack) and CI. Railpack reads `engines.node` before `.nvmrc`. Nixpacks' pinned
+  Node 24.10.0 does not satisfy the locked `isomorphic-dompurify` engine constraint. Never install
+  with `--ignore-engines`.
+
+- Type checking: use TypeScript 6.0.3 (latest supported 6.x). `astro check` in Astro 7.4.2
+  explicitly rejects TypeScript 7.0; the experimental replacement requires TypeScript 7.1+.
+  Keep full Astro type checking enabled until a stable supported migration is available.
 
 - **Number encodings:** token amounts are BigInt strings → `fromWei(v, decimals)`; position
   liquidation prices are scaled by `36 - decimals`; `riskPremiumPPM`/`reserveContribution` are PPM
