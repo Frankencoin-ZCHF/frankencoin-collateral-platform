@@ -114,10 +114,23 @@ export function formatDateTime(iso: string | null | undefined): string {
 }
 
 export function formatDuration(seconds: number | null | undefined): string {
-  if (!seconds || !Number.isFinite(seconds)) return "–";
+  if (seconds == null || seconds < 0 || !Number.isFinite(seconds)) return "–";
   const h = seconds / 3600;
   if (h < 48) return `${round(h, 1)} h`;
   return `${round(h / 24, 1)} d`;
+}
+
+/** Assessment caps are recommendations; "no limit" must never be confused with missing data. */
+export function formatMintingLimit(limit: number | "no limit" | null): string {
+  return limit === "no limit" ? "No limit" : limit === null ? "–" : `${formatCompact(limit)} ZCHF`;
+}
+
+export function formatMaturity(months: number | null): string {
+  if (months === null) return "–";
+  const years = months / 12;
+  return months > 0 && Number.isInteger(years)
+    ? `${formatNumber(years, 0)} ${years === 1 ? "year" : "years"}`
+    : `${formatNumber(months, 2).replace(/\.00$/, "")} ${months === 1 ? "month" : "months"}`;
 }
 
 export function shortAddress(addr: string | null | undefined, chars = 4): string {

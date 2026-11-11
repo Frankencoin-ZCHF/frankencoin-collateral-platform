@@ -65,11 +65,17 @@ minimum required by the locked `isomorphic-dompurify` version.
 
 ## Refreshing test fixtures
 
+Keep the original assessment fixtures: they cover the legacy schema and historical versions.
+Current-schema fixtures are pinned to assessment commit `8db997f73e736fcd82f9ffba1be6f238a3cd14b2` (9 November 2026).
+When deliberately refreshing them, update the provenance and expected values in the tests.
+
 ```bash
-R=https://raw.githubusercontent.com/Frankencoin-ZCHF/frankencoin-collateral-assessments/main
-curl -so test/fixtures/wstETH.md $R/assessments/draft/wstETH.md
-curl -so test/fixtures/WBTC.md   $R/assessments/draft/WBTC.md
-curl -so test/fixtures/template.md $R/templates/collateral-assessment-template.md
+R=https://raw.githubusercontent.com/Frankencoin-ZCHF/frankencoin-collateral-assessments/8db997f73e736fcd82f9ffba1be6f238a3cd14b2
+for ticker in WBTC BOSS CHFAU; do
+  curl -fso test/fixtures/current-schema/$ticker.md $R/assessments/published/$ticker.md
+done
+curl -fso test/fixtures/current-schema/NEAR.md $R/assessments/draft/NEAR.md
+curl -fso test/fixtures/current-schema/template.md $R/templates/assessment-template.md
 A=https://api.frankencoin.com
 curl -so test/fixtures/positions.json $A/positions/list
 curl -so test/fixtures/prices.json $A/prices/list
@@ -78,6 +84,23 @@ curl -so test/fixtures/challenges.json $A/challenges/list
 curl -so test/fixtures/stats.json $A/ecosystem/collateral/stats
 # bridges.json (StablecoinBridge minters + on-chain horizon/limit/minted): see scripts/capture-bridges.mjs
 ```
+
+## Assessment schema compatibility
+
+The reader supports both the current three-category tail-risk schema and legacy six-category
+assessments. Legacy liquidation price and minimum collateral remain readable when present;
+omitted measurements render as unavailable rather than zero. Maturity strings such as `3 years`
+normalize to `maturityMonths: 36`; legacy numeric maturity remains a number of months.
+
+`assessment.data.params.globalMintingLimit` in the JSON API is a number, the string `"no limit"`,
+or `null` (unavailable). An uncapped recommendation is distinct from a missing value, a zero cap,
+and the actual on-chain limit. Unrecognized textual limit/maturity values normalize to `null`,
+while the original frontmatter remains available in the API and version diff. Identity validation
+and per-file failure isolation remain in place; invalid files do not prevent other assets from loading.
+
+Historical lookups cover `draft`, `published`, `deprecated`, and the older `publish` directory.
+If a recorded path was removed by a move, the loader resolves the file in the requested commit's
+tree. It never substitutes a current assessment for a historical one.
 
 ## License
 

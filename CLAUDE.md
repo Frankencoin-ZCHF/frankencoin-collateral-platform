@@ -47,8 +47,9 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
 
 - `src/services/assessments.ts` — index of `assessments/{draft,published,deprecated}/<TICKER>.md`
   via the Git Trees API (1 call) + `raw.githubusercontent.com` (no API quota); `versions()` queries
-  the Commits API for **all three folders** because files move between them and `?path=` does not
-  follow renames; `atVersion()` reads the file at a sha (cached 24 h).
+  the Commits API for all three folders and the historical `publish` alias because `?path=` does not
+  follow renames. `atVersion()` resolves moved files in the requested commit's tree after a 404;
+  network failures are not masked by loading a different version.
 - `src/services/protocol.ts` — headline figures (minted, aggregate limit, remaining capacity,
   open/requested/closed/denied counts, TVL) come from `/ecosystem/collateral/stats`, the protocol's
   authoritative aggregate. `/positions/list` (V1+V2) is grouped by collateral only for the position
@@ -90,7 +91,7 @@ pages/*.astro ──▶ services/* ──▶ upstream/* ──▶ lib/cache.ts
   `links.discussion` URL in the frontmatter → else `matchThreads()` heuristic on the
   "Acceptable Collaterals" category titles.
 - `src/lib/frontmatter.ts` mirrors the assessments repo's `scripts/validate.js` delimiter logic
-  (`---` … `indexOf("---", 3)`) and its JSON schema as zod, kept `.loose()` so new keys such as
+  (`---` … `indexOf("---", 3)`) and reads both the current and legacy schemas, kept `.loose()` so new keys such as
   `links.discussion` / `blocks` pass through — with output-oriented rules on display fields
   (ticker/name/author: no `<>`/control chars; address/date formats). `buildAssessment()` also
   rejects *published* files with a future date or missing address. `index()` resolves the ref to
@@ -151,6 +152,12 @@ minting has ended. AG Grid loads only when “Advanced data & export” opens (`
 - **Frontmatter units differ:** `market_risk`/`compensation` are `"16.98%"` strings,
   `retained_reserve`/`target_interest_rate` are fractions (`0.25`, `0.0075`) — `lib/normalize.ts`
   turns everything into percents; `Assessment.raw` keeps the verbatim object for diffs.
+- **Schema compatibility:** current assessments have three tail-risk categories and omit liquidation
+  price/minimum collateral; all six legacy categories and optional old fields remain supported.
+  Maturity `"N years"` normalizes to months; legacy numeric maturity already means months.
+  `globalMintingLimit` is `number | "no limit" | null`: never coerce an uncapped recommendation to
+  zero, Infinity or unavailable, and never treat it as the actual protocol cap. Missing measurements
+  stay unknown; unsupported textual maturity/cap values remain in raw diffs but normalize to null.
 - raw.githubusercontent.com answers in 4–8 s per file; `upstream/github.ts` limits raw fetches to 4 in flight with a 20 s timeout. A partial index (transient fetch failures) is dropped from the cache after 30 s and the affected collaterals show "assessment temporarily unavailable" instead of "no assessment".
 - Findings share one model in THREE queues (`services/attention.ts`): `live` = financial
   observations (challenges, debt near liquidation, peg changes); `data` = unavailable, stale,
@@ -173,7 +180,7 @@ minting has ended. AG Grid loads only when “Advanced data & export” opens (`
 
 ## Cross-repo
 
-- Assessments repo: proposing a change there? Keep `templates/collateral-assessment-template.md`,
+- Assessments repo: proposing a change there? Keep `templates/assessment-template.md`,
   `schema/collateral-assessment.schema.json` and this repo's `lib/frontmatter.ts` consistent. The
   planned additions are optional `links.discussion` and top-level `blocks` (both already tolerated
   here).

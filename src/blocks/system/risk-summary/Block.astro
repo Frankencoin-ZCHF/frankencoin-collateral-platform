@@ -2,7 +2,7 @@
 import type { RiskSummaryData } from "./index";
 import Pill from "@/components/Pill.astro";
 import { lendingTerms, formatTerm } from "@/services/lending";
-import { formatCompact, formatDate, formatDuration, formatPercent } from "@/lib/numbers";
+import { formatCompact, formatDate, formatDuration, formatMintingLimit, formatPercent } from "@/lib/numbers";
 interface Props { data: RiskSummaryData }
 const { data } = Astro.props as Props;
 const d = data.data, l = data.live, terms = lendingTerms(l);
@@ -13,7 +13,7 @@ const assessed = data.status === "draft" ? "Proposed" : data.status === "depreca
     <p class="fc-kv-label">Effective annual interest</p>
     <p class="fc-kv-value">{l?.bridge ? "Not applicable" : formatTerm(terms.interest)}</p>
     <p class="fc-kv-unit">{l?.bridge ? "1:1 stablecoin exchange" : "Current rate, adjusted for retained reserve"}</p>
-    {d && <p class="fc-assessed-term">{assessed}: <strong>{formatPercent(d.totalCompensationPct)}</strong><span class="fc-cell-note">Total tail-risk compensation per year</span></p>}
+    {d && <p class="fc-assessed-term">{assessed}: <strong>{formatPercent(d.params.targetInterestRatePct ?? d.totalCompensationPct)}</strong><span class="fc-cell-note">{d.params.targetInterestRatePct === null ? "Total tail-risk compensation per year" : "Effective annual interest target"}</span></p>}
   </div>
   <div>
     <p class="fc-kv-label">Retained reserve</p>
@@ -25,7 +25,7 @@ const assessed = data.status === "draft" ? "Proposed" : data.status === "depreca
     <p class="fc-kv-label">Global minting limit</p>
     <p class="fc-kv-value">{terms.limit === null ? "Unavailable" : formatCompact(terms.limit)}<span class="ty-small">{terms.limit === null ? "" : " ZCHF"}</span></p>
     <p class="fc-kv-unit">{l?.bridge ? "Bridge limit" : "Across all originals"}{terms.limitUsedPct !== null && ` · ${formatPercent(terms.limitUsedPct, 1)} used`}</p>
-    {d && <p class="fc-assessed-term">{assessed}: <strong>{d.params.globalMintingLimit === null ? "—" : `${formatCompact(d.params.globalMintingLimit)} ZCHF`}</strong></p>}
+    {d && <p class="fc-assessed-term">{assessed}: <strong>{formatMintingLimit(d.params.globalMintingLimit)}</strong></p>}
   </div>
 </div>
 {l && !l.bridge && <p class="ty-small text-[var(--color-gray-75)] mt-3">

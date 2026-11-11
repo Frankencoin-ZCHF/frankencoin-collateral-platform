@@ -30,9 +30,19 @@ function levelOrNull(v: unknown): string | null {
 }
 
 function num(v: unknown): number | null {
-  if (v === null || v === undefined || v === "") return null;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null;
+}
+
+/** Keep the API's month unit stable across legacy numeric and current year-based assessments. */
+function maturityMonths(v: RawFrontmatter["risk_parameters"]["maturity"]): number | null {
+  if (typeof v === "number") return num(v);
+  const match = typeof v === "string" ? /^([1-9][0-9]*) years?$/i.exec(v.trim()) : null;
+  const months = match ? Number(match[1]) * 12 : NaN;
+  return Number.isSafeInteger(months) ? months : null;
+}
+
+function mintingLimit(v: RawFrontmatter["risk_parameters"]["global_minting_limit"]): AssessmentData["params"]["globalMintingLimit"] {
+  return typeof v === "string" && v.trim().toLowerCase() === "no limit" ? "no limit" : num(v);
 }
 
 function httpUrl(v: unknown): string | null {
@@ -55,7 +65,7 @@ function findDiscussionUrl(links: RawFrontmatter["links"]): string | null {
 export function normalizeTailRisks(raw: RawFrontmatter["risk_scores"]["tail_risks"]): TailRisk[] {
   const out: TailRisk[] = [];
   for (const category of TAIL_RISK_CATEGORIES) {
-    for (const r of raw[category] ?? []) {
+    for (const r of raw?.[category] ?? []) {
       const probability = levelOrNull(r.probability);
       const severity = levelOrNull(r.severity);
       const p = probability ? PROBABILITY_PCT[probability.toLowerCase()] : undefined;
@@ -97,13 +107,14 @@ export function normalizeAssessment(raw: RawFrontmatter): AssessmentData {
       marketRiskPct: parsePercent(raw.risk_scores.market_risk),
     },
     tailRisks,
-    totalCompensationPct: comps.length ? round(sum(comps), 4) : null,
+    // A partial sum is not a total. Missing compensation must not look like zero risk.
+    totalCompensationPct: comps.length && comps.length === tailRisks.length ? round(sum(comps), 4) : null,
     params: {
       retainedReservePct: fractionToPercent(p.retained_reserve),
       targetInterestRatePct: fractionToPercent(p.target_interest_rate),
-      globalMintingLimit: num(p.global_minting_limit),
+      globalMintingLimit: mintingLimit(p.global_minting_limit),
       liquidationPrice: num(p.liquidation_price),
-      maturityMonths: num(p.maturity),
+      maturityMonths: maturityMonths(p.maturity),
       auctionDurationHours: num(p.auction_duration),
       minimumCollateral: num(p.minimum_collateral),
     },
