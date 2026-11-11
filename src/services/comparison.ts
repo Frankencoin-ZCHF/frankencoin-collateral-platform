@@ -1,5 +1,5 @@
 /** Assessment comparisons describe observed settings; publication is not governance approval. */
-import { formatCompact, formatDate, formatDuration, formatNumber, formatPercent, formatPrice } from "@/lib/numbers";
+import { formatCompact, formatDate, formatDuration, formatMaturity, formatMintingLimit, formatNumber, formatPercent, formatPrice } from "@/lib/numbers";
 import { effectiveInterestPct } from "./lending";
 import type { AssessmentData, AssessmentStatus, LiveCollateral, Position } from "@/types";
 
@@ -68,7 +68,7 @@ function numeric(
   };
   if (values.length !== samples.length) return { ...base, verdict: "unavailable", explanation: "One or more positions are missing this setting. The available values cannot establish agreement." };
   if (!values.length) return { ...base, verdict: "unavailable", explanation: "No comparable on-chain settings are available." };
-  if (assessed === null) return { ...base, verdict: "not-comparable", explanation: "The assessment does not set this parameter." };
+  if (assessed === null) return { ...base, verdict: "not-comparable", explanation: "No comparable value is available in this assessment." };
   if (values.every((v) => exact(v, assessed)))
     return { ...base, verdict: "matches", explanation: `Every observed setting equals ${baseline}.` };
   const differenceText = differentPositions.length
@@ -162,18 +162,25 @@ export function compareParameters(p: AssessmentData["params"], l: LiveCollateral
       "global_minting_limit",
       "Aggregate minting limit",
       "Maximum outstanding ZCHF under the current aggregate limits; not immediately available borrowing capacity",
-      p.globalMintingLimit,
+      p.globalMintingLimit === "no limit" ? null : p.globalMintingLimit,
       l?.totalLimitZchf != null ? [{ value: l.totalLimitZchf }] : [],
       (n) => `${formatCompact(n)} ZCHF`,
       25,
       "lower",
     ),
   ];
+  if (p.globalMintingLimit === "no limit") {
+    const limitRow = rows.find((r) => r.key === "global_minting_limit")!;
+    limitRow.assessed = formatMintingLimit(p.globalMintingLimit);
+    limitRow.explanation = "The assessment recommends no cap. The observed protocol limit is shown separately; this is not a missing assessment value.";
+    // No numerical equality/difference can be established against an uncapped recommendation.
+    limitRow.verdict = l?.totalLimitZchf != null ? "not-comparable" : "unavailable";
+  }
   rows.push({
     key: "maturity",
     label: "Maturity",
     hint: "Proposed position lifetime",
-    assessed: p.maturityMonths === null ? "–" : `${formatNumber(p.maturityMonths, 0)} months`,
+    assessed: formatMaturity(p.maturityMonths),
     onchain: l?.nextExpiry ? `next expiry ${formatDate(l.nextExpiry)}` : "–",
     verdict: "not-comparable",
     explanation: "Individual expiry dates cannot be compared directly with a proposed lifetime.",

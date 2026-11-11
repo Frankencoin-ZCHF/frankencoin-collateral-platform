@@ -86,6 +86,15 @@ describe("per-position assessment comparisons", () => {
     expect(r.explanation).not.toMatch(/approved assessment|approved baseline/);
     expect(r.explanation).toContain("does not establish");
   });
+  it("separates an uncapped assessment from the actual on-chain cap and missing recommendations", () => {
+    const current = { ...live, totalLimitZchf: 5_000_000 };
+    const uncapped = { ...assessment.data.params, globalMintingLimit: "no limit" as const };
+    const r = compareParameters(uncapped, current, "published").find((r) => r.key === "global_minting_limit")!;
+    expect(r).toMatchObject({ assessed: "No limit", onchain: "5.0M ZCHF", verdict: "not-comparable", differentDebt: 0 });
+    expect(compareParameters({ ...uncapped, globalMintingLimit: null }, current).find((r) => r.key === "global_minting_limit")?.assessed).toBe("–");
+    const joined = join([{ ...assessment, data: { ...assessment.data, params: uncapped } }], new Map([[current.address, current]]), "2026-11-11");
+    expect(itemsFor(joined.find((r) => r.assessment)!).some((i) => i.title.startsWith("Aggregate minting limit differs"))).toBe(false);
+  });
 });
 
 describe("finding categories", () => {

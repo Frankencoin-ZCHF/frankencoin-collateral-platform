@@ -20,6 +20,7 @@ const { data } = Astro.props as Props;
       </tr>
     </thead>
     <tbody>
+      {data.groups.every((g) => g.risks.length === 0) && <tr><td colspan="5">No structured tail-risk breakdown is available in this assessment.</td></tr>}
       {
         data.groups.flatMap((g) =>
           g.risks.map((r, i) => (
@@ -43,5 +44,5 @@ const { data } = Astro.props as Props;
   </table>
 </div>
 <p class="ty-2xs text-[var(--color-gray-60)] mt-3">
-  Compensation = framework probability × severity (Negligible &lt;0.5% · Very Low 0.5% · Low 1% · Medium 2–5% · High &gt;5% ; Moderate 25% · Severe 50% · Critical 100%). Values follow the author’s assessment. The total is the assessed effective annual interest rate. See the <a href="/framework" class="underline">risk framework</a>.
+  Compensation = framework probability × severity (Negligible &lt;0.5% · Very Low 0.5% · Low 1% · Medium 2–5% · High &gt;5% ; Moderate 25% · Severe 50% · Critical 100%). Values follow the author’s assessment. A total is shown only when compensation is available for every listed risk. See the <a href="/framework" class="underline">risk framework</a>.
 </p>

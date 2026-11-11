@@ -20,9 +20,11 @@ export const ETHERSCAN = "https://etherscan.io";
 
 /** Folders inside the assessments repo, in precedence order when a ticker exists in several. */
 export const ASSESSMENT_STATUSES = ["published", "draft", "deprecated"] as const;
+/** The upstream history briefly used `publish` before renaming it to `published`. */
+export const ASSESSMENT_FOLDERS = [...ASSESSMENT_STATUSES, "publish"] as const;
 export const ASSESSMENTS_DIR = "assessments";
 export const FRAMEWORK_PATH = "framework/collateral-risk-framework.md";
-export const TEMPLATE_PATH = "templates/collateral-assessment-template.md";
+export const TEMPLATE_PATH = "templates/assessment-template.md";
 /** Files inside the assessment folders that are not assessments. */
 export const ASSESSMENT_IGNORED_FILES = new Set(["example.md", ".gitkeep", "README.md"]);
 

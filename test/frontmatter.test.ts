@@ -29,7 +29,7 @@ describe("parseAssessmentFile", () => {
     expect(frontmatter.asset_ticker).toBe("wstETH");
     expect(frontmatter.contract_address.toLowerCase()).toBe("0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0");
     expect(frontmatter.risk_parameters.retained_reserve).toBe(0.25);
-    expect(frontmatter.risk_scores.tail_risks.counterparty_risks[0]?.compensation).toBe("0.25%");
+    expect(frontmatter.risk_scores.tail_risks?.counterparty_risks?.[0]?.compensation).toBe("0.25%");
     expect(body).toMatch(/^# Collateral Risk Assessment/);
   });
 

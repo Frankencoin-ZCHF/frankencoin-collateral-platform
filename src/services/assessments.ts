@@ -7,6 +7,7 @@ import { config } from "@/config";
 import { getOrLoad, invalidate, TTL } from "@/lib/cache";
 import {
   ASSESSMENTS_DIR,
+  ASSESSMENT_FOLDERS,
   ASSESSMENT_IGNORED_FILES,
   ASSESSMENT_STATUSES,
   FRAMEWORK_PATH,
@@ -29,14 +30,14 @@ export interface AssessmentIndex {
   fetchedAt: string;
 }
 
-const FILE_RE = new RegExp(`^${ASSESSMENTS_DIR}/(${ASSESSMENT_STATUSES.join("|")})/([^/]+)\\.md$`);
+const FILE_RE = new RegExp(`^${ASSESSMENTS_DIR}/(${ASSESSMENT_FOLDERS.join("|")})/([^/]+)\\.md$`);
 
 function parseTreePath(path: string): { status: AssessmentStatus; ticker: string } | null {
   const m = FILE_RE.exec(path);
   if (!m) return null;
   const file = path.split("/").pop() ?? "";
   if (ASSESSMENT_IGNORED_FILES.has(file)) return null;
-  return { status: m[1] as AssessmentStatus, ticker: m[2] as string };
+  return { status: m[1] === "publish" ? "published" : m[1] as AssessmentStatus, ticker: m[2] as string };
 }
 
 function toVersionRef(c: github.CommitInfo, path: string): VersionRef {
@@ -97,7 +98,7 @@ export function index(): Promise<AssessmentIndex> {
 
     const failures: ParseFailure[] = [];
     const bySlug = new Map<string, Assessment>();
-    const precedence = (s: AssessmentStatus) => ASSESSMENT_STATUSES.indexOf(s);
+    const precedence = (a: Assessment) => ASSESSMENT_STATUSES.indexOf(a.status) * 2 + (a.path.split("/")[1] === "publish" ? 1 : 0);
 
     const results = await Promise.allSettled(
       candidates.map(async ({ entry, meta }) => {
@@ -115,7 +116,7 @@ export function index(): Promise<AssessmentIndex> {
       }
       const a = r.value;
       const existing = bySlug.get(a.slug);
-      if (!existing || precedence(a.status) < precedence(existing.status)) bySlug.set(a.slug, a);
+      if (!existing || precedence(a) < precedence(existing)) bySlug.set(a.slug, a);
     });
 
     const items = [...bySlug.values()].sort((a, b) => a.ticker.localeCompare(b.ticker, "en", { sensitivity: "base" }));
@@ -140,7 +141,7 @@ export async function bySlug(slug: string): Promise<Assessment | null> {
 
 /**
  * Version history for a ticker. Because a file moves between draft/published/deprecated
- * (and `?path=` does not follow renames), all three candidate paths are queried and
+ * (and `?path=` does not follow renames), all supported candidate paths are queried and
  * merged by sha.
  */
 export function versions(slug: string): Promise<VersionRef[]> {
@@ -148,7 +149,7 @@ export function versions(slug: string): Promise<VersionRef[]> {
     const current = await bySlug(slug);
     if (!current) throw new NotFoundError("assessments", slug);
     const fileName = current.path.split("/").pop()!;
-    const paths = ASSESSMENT_STATUSES.map((s) => `${ASSESSMENTS_DIR}/${s}/${fileName}`);
+    const paths = ASSESSMENT_FOLDERS.map((s) => `${ASSESSMENTS_DIR}/${s}/${fileName}`);
 
     const lists = await Promise.allSettled(paths.map((p) => github.commitsForPath(repo(), ref(), p)));
     const bySha = new Map<string, VersionRef>();
@@ -167,12 +168,30 @@ export function versions(slug: string): Promise<VersionRef[]> {
 /** The assessment as it was at `sha`. */
 export async function atVersion(slug: string, sha: string): Promise<{ assessment: Assessment; version: VersionRef; all: VersionRef[] }> {
   const all = await versions(slug);
-  const version = all.find((v) => v.sha === sha || v.sha.startsWith(sha));
+  let version = all.find((v) => v.sha === sha || v.sha.startsWith(sha));
   if (!version) throw new NotFoundError("assessments", `${slug}@${sha}`);
-  const status = (version.path.split("/")[1] ?? "draft") as AssessmentStatus;
-  const ticker = version.path.split("/").pop()!.replace(/\.md$/, "");
-  const source = await github.rawFile(repo(), version.sha, version.path);
-  return { assessment: buildAssessment(source, version.path, status, ticker, version), version, all };
+  let source: string;
+  try {
+    source = await github.rawFile(repo(), version.sha, version.path);
+  } catch (e) {
+    if (!(e instanceof NotFoundError)) throw e;
+    // A move commit appears in both paths' histories. Resolve the file that actually
+    // exists at THAT commit, rather than substituting the current assessment.
+    const t = await github.tree(repo(), version.sha);
+    const fileName = version.path.split("/").pop();
+    const destination = ASSESSMENT_FOLDERS.map((folder) => `${ASSESSMENTS_DIR}/${folder}/${fileName}`)
+      .find((path) => t.entries.some((entry) => entry.type === "blob" && entry.path === path));
+    if (!destination) throw e;
+    version = { ...version, path: destination };
+    source = await github.rawFile(repo(), version.sha, destination);
+  }
+  const meta = parseTreePath(version.path);
+  if (!meta) throw new NotFoundError("assessments", version.path);
+  return {
+    assessment: buildAssessment(source, version.path, meta.status, meta.ticker, version),
+    version,
+    all: all.map((v) => v.sha === version.sha ? version : v),
+  };
 }
 
 export function frameworkMarkdown(): Promise<string> {

@@ -22,19 +22,20 @@ export interface RawFrontmatter {
   author: string;
   links: { etherscan: string; coingecko: string; website: string; docs: string; other: string; discussion?: string } & Record<string, unknown>;
   risk_scores: {
-    public_information: string;
-    free_float: string;
-    market_risk: string;
-    tail_risks: Record<TailRiskCategory, RawTailRisk[]>;
+    public_information?: string;
+    free_float?: string;
+    market_risk?: string;
+    tail_risks?: Partial<Record<TailRiskCategory, RawTailRisk[]>>;
   };
   risk_parameters: {
-    retained_reserve: number | null;
-    target_interest_rate: number | null;
-    global_minting_limit: number | null;
-    liquidation_price: number | null;
-    maturity: number | null;
-    auction_duration: number | null;
-    minimum_collateral: number | null;
+    retained_reserve?: number | null;
+    target_interest_rate?: number | null;
+    global_minting_limit?: number | string | null;
+    liquidation_price?: number | null;
+    /** Current schema: "N years". Legacy schema: a number of months. */
+    maturity?: number | string | null;
+    auction_duration?: number | null;
+    minimum_collateral?: number | null;
   };
   blocks?: unknown[];
   [key: string]: unknown;
@@ -68,7 +69,8 @@ export interface AssessmentData {
   params: {
     retainedReservePct: number | null;
     targetInterestRatePct: number | null;
-    globalMintingLimit: number | null;
+    /** "no limit" is an explicit assessment recommendation, never an on-chain limit or missing value. */
+    globalMintingLimit: number | "no limit" | null;
     liquidationPrice: number | null;
     maturityMonths: number | null;
     auctionDurationHours: number | null;

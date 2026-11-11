@@ -14,7 +14,7 @@ describe("structuredDiff", () => {
     const v1 = parseAssessmentFile(fixture("wstETH.md")).frontmatter;
     const v2 = structuredClone(v1);
     v2.risk_parameters.retained_reserve = 0.3;
-    v2.risk_scores.tail_risks.legal_risks[0]!.compensation = "0.1%";
+    v2.risk_scores.tail_risks!.legal_risks![0]!.compensation = "0.1%";
     (v2.links as Record<string, unknown>).discussion = "https://github.com/x/y/discussions/1";
     delete (v2.links as Record<string, unknown>).other;
 
